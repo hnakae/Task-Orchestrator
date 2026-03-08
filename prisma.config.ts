@@ -4,7 +4,12 @@ import { config } from "dotenv";
 
 config({ path: path.resolve(process.cwd(), ".env") });
 
-import { defineConfig, env } from "prisma/config";
+import { defineConfig } from "prisma/config";
+
+// Use placeholder when DATABASE_URL is missing so `prisma generate` can run
+// (e.g. on Vercel build where DB env may be runtime-only). Runtime always uses real env.
+const databaseUrl =
+  process.env.DATABASE_URL ?? "postgresql://placeholder:placeholder@localhost:5432/placeholder";
 
 export default defineConfig({
   schema: "prisma/schema.prisma",
@@ -13,6 +18,6 @@ export default defineConfig({
   },
   engine: "classic",
   datasource: {
-    url: env("DATABASE_URL"),
+    url: databaseUrl,
   },
 });
