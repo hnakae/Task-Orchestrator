@@ -1,14 +1,16 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getTasks } from "./actions";
 import { TaskList } from "./task-list";
 import { TaskCreateForm } from "./task-create-form";
 
-export default async function TasksPage() {
+async function TasksPageContent() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
   if (!user) redirect("/auth/login");
 
   const result = await getTasks();
@@ -20,5 +22,13 @@ export default async function TasksPage() {
       <TaskCreateForm />
       <TaskList initialTasks={tasks} />
     </div>
+  );
+}
+
+export default function TasksPage() {
+  return (
+    <Suspense fallback={<div>Loading tasks...</div>}>
+      <TasksPageContent />
+    </Suspense>
   );
 }

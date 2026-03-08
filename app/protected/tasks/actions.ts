@@ -2,26 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { taskCreateSchema, taskUpdateSchema } from "@/lib/schemas/task";
-
-/** Task row as returned from Supabase (snake_case) */
-export type TaskRow = {
-  id: string;
-  user_id: string;
-  title: string;
-  importance: number;
-  weight: number;
-  deadline: string | null;
-  created_at: string;
-  updated_at: string;
-};
+import { prisma } from "@/lib/prisma";
+import { TaskCreateInputSchema, TaskUpdateInputSchema } from "@/lib/generated/zod";
+import type { Task } from "@/lib/generated/prisma/client";
 
 export type ActionResult<T = void> =
   | { success: true; data: T }
   | { success: false; error: string };
 
 /** Get all tasks for the current user, ordered by deadline (nulls last) then created_at */
-export async function getTasks(): Promise<ActionResult<TaskRow[]>> {
+export async function getTasks(): Promise<ActionResult<Task[]>> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -32,23 +22,24 @@ export async function getTasks(): Promise<ActionResult<TaskRow[]>> {
     return { success: false, error: "Not authenticated" };
   }
 
-  const { data, error } = await supabase
-    .from("tasks")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("deadline", { ascending: true, nullsFirst: false })
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    return { success: false, error: error.message };
+  try {
+    const tasks = await prisma.task.findMany({
+      where: { userId: user.id },
+      orderBy: [
+        { deadline: "asc" },
+        { createdAt: "asc" },
+      ],
+    });
+    return { success: true, data: tasks };
+  } catch (error) {
+    return { success: false, error: "Failed to fetch tasks" };
   }
-  return { success: true, data: (data ?? []) as TaskRow[] };
 }
 
 /** Create a task. Validates with Zod, sets user_id from auth. */
 export async function createTask(
   formData: FormData
-): Promise<ActionResult<TaskRow>> {
+): Promise<ActionResult<Task>> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -66,44 +57,36 @@ export async function createTask(
       : undefined,
     weight: formData.has("weight") ? Number(formData.get("weight")) : undefined,
     deadline: formData.get("deadline")
-      ? String(formData.get("deadline"))
+      ? new Date(String(formData.get("deadline")))
       : undefined,
   };
 
-  const parsed = taskCreateSchema.safeParse(raw);
+  const parsed = TaskCreateInputSchema.safeParse(raw);
   if (!parsed.success) {
-    const first = parsed.error.flatten().fieldErrors;
-    const msg =
-      Object.values(first).flat().find(Boolean) ?? "Invalid task data";
-    return { success: false, error: String(msg) };
+    return { success: false, error: "Invalid task data" };
   }
 
-  const { title, importance, weight, deadline } = parsed.data;
-  const { data, error } = await supabase
-    .from("tasks")
-    .insert({
-      user_id: user.id,
-      title,
-      importance,
-      weight,
-      deadline: deadline?.toISOString() ?? null,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    return { success: false, error: error.message };
+  try {
+    const data = await prisma.task.create({
+      data: {
+        ...parsed.data,
+        userId: user.id, // Explicitly enforce the authenticated user's ID
+      },
+    });
+    
+    revalidatePath("/protected/tasks");
+    revalidatePath("/protected");
+    return { success: true, data };
+  } catch (error) {
+    return { success: false, error: "Failed to create task" };
   }
-  revalidatePath("/protected/tasks");
-  revalidatePath("/protected");
-  return { success: true, data: data as TaskRow };
 }
 
 /** Update a task by id. Validates with Zod; only updates provided fields. */
 export async function updateTask(
   id: string,
   formData: FormData
-): Promise<ActionResult<TaskRow>> {
+): Promise<ActionResult<Task>> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -121,44 +104,34 @@ export async function updateTask(
       : undefined,
     weight: formData.has("weight") ? Number(formData.get("weight")) : undefined,
     deadline: formData.get("deadline")
-      ? String(formData.get("deadline"))
+      ? new Date(String(formData.get("deadline")))
       : undefined,
   };
 
-  const parsed = taskUpdateSchema.safeParse(raw);
+  const parsed = TaskUpdateInputSchema.safeParse(raw);
   if (!parsed.success) {
-    const first = parsed.error.flatten().fieldErrors;
-    const msg =
-      Object.values(first).flat().find(Boolean) ?? "Invalid task data";
-    return { success: false, error: String(msg) };
+    return { success: false, error: "Invalid task data" };
   }
 
-  const payload: Record<string, unknown> = { ...parsed.data };
-  if (payload.deadline !== undefined) {
-    payload.deadline =
-      payload.deadline instanceof Date
-        ? payload.deadline.toISOString()
-        : payload.deadline;
+  try {
+    const data = await prisma.task.update({
+      where: { 
+        id, 
+        userId: user.id // Ensure the task belongs to the user before updating
+      },
+      data: parsed.data,
+    });
+    
+    revalidatePath("/protected/tasks");
+    revalidatePath("/protected");
+    return { success: true, data };
+  } catch (error) {
+    return { success: false, error: "Failed to update task" };
   }
-
-  const { data, error } = await supabase
-    .from("tasks")
-    .update(payload)
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .select()
-    .single();
-
-  if (error) {
-    return { success: false, error: error.message };
-  }
-  revalidatePath("/protected/tasks");
-  revalidatePath("/protected");
-  return { success: true, data: data as TaskRow };
 }
 
 /** Delete a task by id (must belong to current user). */
-export async function deleteTask(id: string): Promise<ActionResult> {
+export async function deleteTask(id: string): Promise<ActionResult<void>> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -169,16 +142,19 @@ export async function deleteTask(id: string): Promise<ActionResult> {
     return { success: false, error: "Not authenticated" };
   }
 
-  const { error } = await supabase
-    .from("tasks")
-    .delete()
-    .eq("id", id)
-    .eq("user_id", user.id);
-
-  if (error) {
-    return { success: false, error: error.message };
+  try {
+    await prisma.task.delete({
+      where: { 
+        id, 
+        userId: user.id 
+      },
+    });
+    
+    revalidatePath("/protected/tasks");
+    revalidatePath("/protected");
+    
+    return { success: true, data: undefined }; 
+  } catch (error) {
+    return { success: false, error: "Failed to delete task" };
   }
-  revalidatePath("/protected/tasks");
-  revalidatePath("/protected");
-  return { success: true };
 }
