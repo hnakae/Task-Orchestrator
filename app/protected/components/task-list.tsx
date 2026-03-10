@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState, useState, useMemo } from "react";
+import { useActionState, useState, useMemo, useEffect } from "react";
 import type { Task } from "@/lib/generated/prisma/client";
-import { updateTask, deleteTask } from "../actions";
+import { updateTask, deleteTask, updateTaskOrder } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,24 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { GripVertical, Sparkles } from "lucide-react";
 
 function formatDate(date: Date | null) {
   if (!date) return "—";
@@ -24,7 +42,15 @@ function formatDate(date: Date | null) {
   });
 }
 
-function TaskItem({ task, showScore }: { task: Task; showScore?: boolean }) {
+function TaskItem({ 
+  task, 
+  dragHandleProps, 
+  isDragging 
+}: { 
+  task: Task; 
+  dragHandleProps?: any;
+  isDragging?: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   
   const [deleteState, deleteAction, isDeleting] = useActionState(
@@ -51,7 +77,7 @@ function TaskItem({ task, showScore }: { task: Task; showScore?: boolean }) {
 
   if (editing) {
     return (
-      <Card>
+      <Card className={isDragging ? "opacity-50" : ""}>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Edit task</CardTitle>
         </CardHeader>
@@ -97,17 +123,26 @@ function TaskItem({ task, showScore }: { task: Task; showScore?: boolean }) {
   }
 
   return (
-    <Card>
+    <Card className={isDragging ? "opacity-50 border-primary" : ""}>
       <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2">
-        <div className="flex flex-col gap-1">
-          <CardTitle className="text-base">{task.title}</CardTitle>
-          {showScore && (
+        <div className="flex items-start gap-2">
+          {dragHandleProps && (
+            <button
+              {...dragHandleProps}
+              className="mt-1 p-1 hover:bg-muted rounded cursor-grab active:cursor-grabbing shrink-0"
+              aria-label="Drag to reorder"
+            >
+              <GripVertical className="h-4 w-4 text-muted-foreground" />
+            </button>
+          )}
+          <div className="flex flex-col gap-1">
+            <CardTitle className="text-base">{task.title}</CardTitle>
             <div className="flex items-center gap-2">
               <Badge variant="secondary" className="text-[10px] h-5">
                 Score: {task.importance * task.weight}
               </Badge>
             </div>
-          )}
+          </div>
         </div>
         <div className="flex gap-1 shrink-0">
           <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)}>Edit</Button>
@@ -120,7 +155,7 @@ function TaskItem({ task, showScore }: { task: Task; showScore?: boolean }) {
         </div>
       </CardHeader>
       <CardContent className="pb-2">
-        <dl className="text-sm text-muted-foreground grid grid-cols-2 gap-1">
+        <dl className="text-sm text-muted-foreground grid grid-cols-2 gap-1 ml-7">
           <dt>Importance</dt><dd>{task.importance}</dd>
           <dt>Weight</dt><dd>{task.weight}</dd>
           <dt>Deadline</dt><dd>{formatDate(task.deadline)}</dd>
@@ -131,17 +166,86 @@ function TaskItem({ task, showScore }: { task: Task; showScore?: boolean }) {
   );
 }
 
-export function TaskList({ initialTasks }: { initialTasks: Task[] }) {
-  const [isSorted, setIsSorted] = useState(false);
+function SortableTaskItem({ task }: { task: Task }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id });
 
-  const sortedTasks = useMemo(() => {
-    if (!isSorted) return initialTasks;
-    return [...initialTasks].sort((a, b) => {
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <li ref={setNodeRef} style={style} className="list-none">
+      <TaskItem 
+        task={task} 
+        dragHandleProps={{ ...attributes, ...listeners }}
+        isDragging={isDragging}
+      />
+    </li>
+  );
+}
+
+export function TaskList({ initialTasks }: { initialTasks: Task[] }) {
+  const [tasks, setTasks] = useState(initialTasks);
+  const [isSorting, setIsSorting] = useState(false);
+
+  useEffect(() => {
+    setTasks(initialTasks);
+  }, [initialTasks]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  async function handleSortByFocusScore() {
+    setIsSorting(true);
+    const sortedTasks = [...tasks].sort((a, b) => {
       const scoreA = a.importance * a.weight;
       const scoreB = b.importance * b.weight;
       return scoreB - scoreA;
     });
-  }, [initialTasks, isSorted]);
+    
+    setTasks(sortedTasks);
+
+    // Update positions in background
+    const taskPositions = sortedTasks.map((task, index) => ({
+      id: task.id,
+      position: index,
+    }));
+    
+    await updateTaskOrder(taskPositions);
+    setIsSorting(false);
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = tasks.findIndex((t) => t.id === active.id);
+      const newIndex = tasks.findIndex((t) => t.id === over.id);
+
+      const newTasks = arrayMove(tasks, oldIndex, newIndex);
+      setTasks(newTasks);
+
+      // Update positions in background
+      const taskPositions = newTasks.map((task, index) => ({
+        id: task.id,
+        position: index,
+      }));
+      
+      await updateTaskOrder(taskPositions);
+    }
+  }
 
   if (initialTasks.length === 0) {
     return <p className="text-muted-foreground text-sm">No tasks yet. Add one above.</p>;
@@ -152,20 +256,38 @@ export function TaskList({ initialTasks }: { initialTasks: Task[] }) {
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-semibold">Your Tasks</h2>
         <Button 
-          variant={isSorted ? "default" : "outline"} 
+          variant="outline" 
           size="sm" 
-          onClick={() => setIsSorted(!isSorted)}
+          onClick={handleSortByFocusScore}
+          disabled={isSorting}
+          className="relative overflow-hidden group border-primary/20 hover:border-primary/50 transition-all duration-300 bg-gradient-to-r from-background to-muted hover:to-primary/5 px-4"
         >
-          {isSorted ? "Clear Sort" : "Sort by Focus Score"}
+          <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+          <div className="relative flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-primary animate-pulse" />
+            <span className="font-medium bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">
+              {isSorting ? "Sorting..." : "AI Optimize Focus"}
+            </span>
+          </div>
         </Button>
       </div>
-      <ul className="flex flex-col gap-3 list-none p-0 m-0">
-        {sortedTasks.map((task) => (
-          <li key={task.id}>
-            <TaskItem task={task} showScore={isSorted} />
-          </li>
-        ))}
-      </ul>
+
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={tasks.map((t) => t.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <ul className="flex flex-col gap-3 list-none p-0 m-0">
+            {tasks.map((task) => (
+              <SortableTaskItem key={task.id} task={task} />
+            ))}
+          </ul>
+        </SortableContext>
+      </DndContext>
     </div>
   );
 }

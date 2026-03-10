@@ -10,7 +10,7 @@ export type ActionResult<T = void> =
   | { success: true; data: T }
   | { success: false; error: string };
 
-/** Get all tasks for the current user, ordered by deadline (nulls last) then created_at */
+/** Get all tasks for the current user, ordered by position, then deadline (nulls last) then created_at */
 export async function getTasks(): Promise<ActionResult<Task[]>> {
   const supabase = await createClient();
   const {
@@ -26,6 +26,7 @@ export async function getTasks(): Promise<ActionResult<Task[]>> {
     const tasks = await prisma.task.findMany({
       where: { userId: user.id },
       orderBy: [
+        { position: "asc" },
         { deadline: "asc" },
         { createdAt: "asc" },
       ],
@@ -36,7 +37,7 @@ export async function getTasks(): Promise<ActionResult<Task[]>> {
   }
 }
 
-/** Create a task. Validates with Zod, sets user_id from auth. */
+/** Create a task. Validates with Zod, sets user_id from auth and assigns next position. */
 export async function createTask(
   formData: FormData
 ): Promise<ActionResult<Task>> {
@@ -50,6 +51,14 @@ export async function createTask(
     return { success: false, error: "Not authenticated" };
   }
 
+  // Find max position to assign next one
+  const maxTask = await prisma.task.findFirst({
+    where: { userId: user.id },
+    orderBy: { position: "desc" },
+    select: { position: true },
+  });
+  const nextPosition = (maxTask?.position ?? -1) + 1;
+
   const raw = {
     userId: user.id,
     title: formData.get("title") ?? undefined,
@@ -60,6 +69,7 @@ export async function createTask(
     deadline: formData.get("deadline") && formData.get("deadline") !== ""
       ? new Date(String(formData.get("deadline")))
       : undefined,
+    position: nextPosition,
   };
 
   const parsed = TaskCreateInputSchema.safeParse(raw);
@@ -77,6 +87,38 @@ export async function createTask(
     return { success: true, data };
   } catch (error) {
     return { success: false, error: "Failed to create task" };
+  }
+}
+
+/** Update multiple task positions at once. */
+export async function updateTaskOrder(
+  taskPositions: { id: string; position: number }[]
+): Promise<ActionResult<void>> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return { success: false, error: "Not authenticated" };
+  }
+
+  try {
+    // We can't do a bulk update with Prisma easily, so we use a transaction
+    await prisma.$transaction(
+      taskPositions.map(({ id, position }) =>
+        prisma.task.update({
+          where: { id, userId: user.id },
+          data: { position },
+        })
+      )
+    );
+
+    revalidatePath("/protected");
+    return { success: true, data: undefined };
+  } catch (error) {
+    return { success: false, error: "Failed to update task order" };
   }
 }
 
