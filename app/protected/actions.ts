@@ -51,30 +51,28 @@ export async function createTask(
   }
 
   const raw = {
+    userId: user.id,
     title: formData.get("title") ?? undefined,
     importance: formData.has("importance")
       ? Number(formData.get("importance"))
       : undefined,
     weight: formData.has("weight") ? Number(formData.get("weight")) : undefined,
-    deadline: formData.get("deadline")
+    deadline: formData.get("deadline") && formData.get("deadline") !== ""
       ? new Date(String(formData.get("deadline")))
       : undefined,
   };
 
   const parsed = TaskCreateInputSchema.safeParse(raw);
   if (!parsed.success) {
+    console.error("Validation error:", parsed.error.format());
     return { success: false, error: "Invalid task data" };
   }
 
   try {
     const data = await prisma.task.create({
-      data: {
-        ...parsed.data,
-        userId: user.id, // Explicitly enforce the authenticated user's ID
-      },
+      data: parsed.data,
     });
     
-    revalidatePath("/protected/tasks");
     revalidatePath("/protected");
     return { success: true, data };
   } catch (error) {
@@ -122,39 +120,37 @@ export async function updateTask(
       data: parsed.data,
     });
     
-    revalidatePath("/protected/tasks");
     revalidatePath("/protected");
     return { success: true, data };
-  } catch (error) {
+    } catch (error) {
     return { success: false, error: "Failed to update task" };
-  }
-}
+    }
+    }
 
-/** Delete a task by id (must belong to current user). */
-export async function deleteTask(id: string): Promise<ActionResult<void>> {
-  const supabase = await createClient();
-  const {
+    /** Delete a task by id (must belong to current user). */
+    export async function deleteTask(id: string): Promise<ActionResult<void>> {
+    const supabase = await createClient();
+    const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser();
+    } = await supabase.auth.getUser();
 
-  if (authError || !user) {
+    if (authError || !user) {
     return { success: false, error: "Not authenticated" };
-  }
+    }
 
-  try {
+    try {
     await prisma.task.delete({
       where: { 
         id, 
         userId: user.id 
       },
     });
-    
-    revalidatePath("/protected/tasks");
+
     revalidatePath("/protected");
-    
+
     return { success: true, data: undefined }; 
-  } catch (error) {
+    } catch (error) {
     return { success: false, error: "Failed to delete task" };
-  }
-}
+    }
+    }

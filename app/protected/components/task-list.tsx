@@ -2,10 +2,11 @@
 
 import { useActionState, useState, useMemo } from "react";
 import type { Task } from "@/lib/generated/prisma/client";
-import { updateTask, deleteTask } from "./actions";
+import { updateTask, deleteTask } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Card,
   CardContent,
@@ -16,13 +17,14 @@ import {
 
 function formatDate(date: Date | null) {
   if (!date) return "—";
-  return new Date(date).toLocaleDateString(undefined, {
+  const d = new Date(date);
+  return d.toLocaleString(undefined, {
     dateStyle: "short",
-    timeStyle: date.getHours() || date.getMinutes() ? "short" : undefined,
+    timeStyle: d.getHours() || d.getMinutes() ? "short" : undefined,
   });
 }
 
-function TaskItem({ task }: { task: Task }) {
+function TaskItem({ task, showScore }: { task: Task; showScore?: boolean }) {
   const [editing, setEditing] = useState(false);
   
   const [deleteState, deleteAction, isDeleting] = useActionState(
@@ -97,7 +99,16 @@ function TaskItem({ task }: { task: Task }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2">
-        <CardTitle className="text-base">{task.title}</CardTitle>
+        <div className="flex flex-col gap-1">
+          <CardTitle className="text-base">{task.title}</CardTitle>
+          {showScore && (
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-[10px] h-5">
+                Score: {task.importance * task.weight}
+              </Badge>
+            </div>
+          )}
+        </div>
         <div className="flex gap-1 shrink-0">
           <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)}>Edit</Button>
           <form action={deleteAction}>
@@ -151,7 +162,7 @@ export function TaskList({ initialTasks }: { initialTasks: Task[] }) {
       <ul className="flex flex-col gap-3 list-none p-0 m-0">
         {sortedTasks.map((task) => (
           <li key={task.id}>
-            <TaskItem task={task} />
+            <TaskItem task={task} showScore={isSorted} />
           </li>
         ))}
       </ul>

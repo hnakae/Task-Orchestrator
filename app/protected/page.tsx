@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Suspense } from "react";
-import TodoApp from "./components/TodoApp";
+import { getTasks } from "./actions";
+import Dashboard from "./components/Dashboard";
 
 async function ProtectedContent() {
   const supabase = await createClient();
@@ -13,7 +14,10 @@ async function ProtectedContent() {
     redirect("/auth/login");
   }
 
-  return <TodoApp />;
+  const result = await getTasks();
+  const tasks = result.success ? result.data : [];
+
+  return <Dashboard initialTasks={tasks} />;
 }
 
 export default function ProtectedPage() {

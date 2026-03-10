@@ -5,7 +5,7 @@ export function TasksButton() {
   return (
     <Link href="/protected">
       <Button className="flex items-center gap-2" size="sm">
-        <span>View Tasks</span>
+        <span>Dashboard</span>
       </Button>
     </Link>
   );
