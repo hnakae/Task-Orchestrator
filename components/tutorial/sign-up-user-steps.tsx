@@ -73,7 +73,7 @@ export function SignUpUserSteps() {
           </Link>
         </TutorialStep>
       ) : null}
-      <TutorialStep title="Sign up your first user">
+      <TutorialStep title="Sign up your fir">
         <p>
           Head over to the{" "}
           <Link

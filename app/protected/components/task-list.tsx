@@ -78,44 +78,44 @@ function TaskItem({
 
   if (editing) {
     return (
-      <Card className={cn(isDragging ? "opacity-50" : "", "border-primary/20 shadow-sm")}>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base text-primary">Edit task</CardTitle>
+      <Card className={cn(isDragging ? "opacity-50" : "", "border-primary shadow-lg ring-1 ring-primary/20")}>
+        <CardHeader className="pb-3 border-b bg-muted/30">
+          <CardTitle className="text-base font-bold text-primary">Edit Task Details</CardTitle>
         </CardHeader>
-        <CardContent className="pb-2">
-          <form action={updateAction} className="flex flex-col gap-3">
+        <CardContent className="pt-6 pb-4">
+          <form action={updateAction} className="flex flex-col gap-5">
             <input type="hidden" name="id" value={task.id} />
             <div className="grid gap-2">
-              <Label htmlFor={`edit-title-${task.id}`} className="text-muted-foreground">Title</Label>
-              <Input id={`edit-title-${task.id}`} name="title" defaultValue={task.title} maxLength={255} className="bg-background/50 border-primary/20 focus:border-primary focus:ring-primary/20" />
+              <Label htmlFor={`edit-title-${task.id}`} className="text-sm font-semibold text-foreground/80">Title</Label>
+              <Input id={`edit-title-${task.id}`} name="title" defaultValue={task.title} maxLength={255} className="bg-background border-input focus:border-primary focus:ring-primary/20" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
-                <Label htmlFor={`edit-importance-${task.id}`} className="text-muted-foreground">Importance</Label>
-                <Input id={`edit-importance-${task.id}`} name="importance" type="number" min={1} max={10} defaultValue={task.importance} className="bg-background/50 border-primary/20" />
+                <Label htmlFor={`edit-importance-${task.id}`} className="text-sm font-semibold text-foreground/80">Importance (1-10)</Label>
+                <Input id={`edit-importance-${task.id}`} name="importance" type="number" min={1} max={10} defaultValue={task.importance} className="bg-background border-input" />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor={`edit-weight-${task.id}`} className="text-muted-foreground">Weight</Label>
-                <Input id={`edit-weight-${task.id}`} name="weight" type="number" min={1} max={10} defaultValue={task.weight} className="bg-background/50 border-primary/20" />
+                <Label htmlFor={`edit-weight-${task.id}`} className="text-sm font-semibold text-foreground/80">Weight (1-10)</Label>
+                <Input id={`edit-weight-${task.id}`} name="weight" type="number" min={1} max={10} defaultValue={task.weight} className="bg-background border-input" />
               </div>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor={`edit-deadline-${task.id}`} className="text-muted-foreground">Deadline</Label>
+              <Label htmlFor={`edit-deadline-${task.id}`} className="text-sm font-semibold text-foreground/80">Deadline</Label>
               <Input
                 id={`edit-deadline-${task.id}`}
                 name="deadline"
                 type="datetime-local"
                 defaultValue={task.deadline ? new Date(task.deadline).toISOString().slice(0, 16) : ""}
-                className="bg-background/50 border-primary/20"
+                className="bg-background border-input"
               />
             </div>
-            {updateState && <p className="text-sm text-destructive">{updateState}</p>}
-            <CardFooter className="p-0 flex gap-2">
-              <Button type="submit" disabled={isUpdating} size="sm">
-                {isUpdating ? "Saving…" : "Save"}
-              </Button>
-              <Button type="button" variant="outline" size="sm" onClick={() => setEditing(false)} className="border-primary/20 hover:bg-primary/5">
+            {updateState && <p className="text-sm text-destructive font-medium">{updateState}</p>}
+            <CardFooter className="p-0 pt-2 flex justify-end gap-3">
+              <Button type="button" variant="outline" size="sm" onClick={() => setEditing(false)} className="hover:bg-muted font-semibold">
                 Cancel
+              </Button>
+              <Button type="submit" disabled={isUpdating} size="sm" className="font-semibold shadow-sm">
+                {isUpdating ? "Saving…" : "Save Changes"}
               </Button>
             </CardFooter>
           </form>
@@ -126,49 +126,77 @@ function TaskItem({
 
   return (
     <Card className={cn(
-      isDragging ? "opacity-50 ring-2 ring-primary ring-offset-2 ring-offset-background" : "hover:border-primary/30",
-      "transition-all duration-300 group overflow-hidden relative"
+      isDragging ? "opacity-50 ring-2 ring-primary ring-offset-2 ring-offset-background" : "hover:shadow-md hover:border-primary/40",
+      "transition-all duration-300 group overflow-hidden border-border bg-card shadow-sm"
     )}>
-      {/* Subtle glow effect */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-      
-      <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2 relative z-10">
-        <div className="flex items-start gap-2">
+      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3 relative z-10">
+        <div className="flex items-start gap-3 flex-1">
           {dragHandleProps && (
             <button
               {...dragHandleProps}
-              className="mt-1 p-1 hover:bg-primary/10 rounded cursor-grab active:cursor-grabbing shrink-0 transition-colors"
+              className="mt-1 p-1.5 hover:bg-primary/10 rounded-md cursor-grab active:cursor-grabbing shrink-0 transition-colors bg-muted/50"
               aria-label="Drag to reorder"
             >
               <GripVertical className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
             </button>
           )}
-          <div className="flex flex-col gap-1">
-            <CardTitle className="text-base group-hover:text-primary transition-colors">{task.title}</CardTitle>
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="text-[10px] h-5 bg-primary/10 text-primary border-primary/20">
-                Score: {task.importance * task.weight}
+          <div className="flex flex-col gap-2 flex-1 min-w-0">
+            <CardTitle className="text-base font-bold leading-tight truncate group-hover:text-primary transition-colors">
+              {task.title}
+            </CardTitle>
+            <div className="flex items-center gap-3">
+              <Badge variant="outline" className="text-[11px] font-bold px-2 py-0.5 border-primary/30 text-primary bg-primary/5">
+                Focus Score: {task.importance * task.weight}
               </Badge>
+              {task.deadline && (
+                <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
+                  <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
+                  {formatDate(task.deadline)}
+                </span>
+              )}
             </div>
           </div>
         </div>
-        <div className="flex gap-1 shrink-0">
-          <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)} className="hover:bg-primary/10 hover:text-primary transition-colors">Edit</Button>
+        <div className="flex gap-2 shrink-0">
+          <Button 
+            type="button" 
+            variant="secondary" 
+            size="sm" 
+            onClick={() => setEditing(true)} 
+            className="h-8 text-xs font-bold transition-all hover:bg-primary hover:text-primary-foreground border-transparent"
+          >
+            Edit
+          </Button>
           <form action={deleteAction}>
             <input type="hidden" name="id" value={task.id} />
-            <Button type="submit" variant="destructive" size="sm" disabled={isDeleting} className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <Button 
+              type="submit" 
+              variant="destructive" 
+              size="sm" 
+              disabled={isDeleting} 
+              className="h-8 text-xs font-bold transition-all border-transparent shadow-sm"
+            >
               {isDeleting ? "…" : "Delete"}
             </Button>
           </form>
         </div>
       </CardHeader>
-      <CardContent className="pb-2 relative z-10">
-        <dl className="text-sm text-muted-foreground grid grid-cols-2 gap-1 ml-7">
-          <dt className="group-hover:text-foreground/70 transition-colors">Importance</dt><dd className="group-hover:text-primary transition-colors">{task.importance}</dd>
-          <dt className="group-hover:text-foreground/70 transition-colors">Weight</dt><dd className="group-hover:text-primary transition-colors">{task.weight}</dd>
-          <dt className="group-hover:text-foreground/70 transition-colors">Deadline</dt><dd className="group-hover:text-foreground/70 transition-colors">{formatDate(task.deadline)}</dd>
-        </dl>
-        {deleteState && <p className="text-sm text-destructive mt-2">{deleteState}</p>}
+      <CardContent className="pb-4 relative z-10 border-t bg-muted/5 mt-1 pt-4">
+        <div className="flex gap-8 ml-10">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Importance</span>
+            <span className="text-sm font-bold text-foreground">{task.importance}</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Weight</span>
+            <span className="text-sm font-bold text-foreground">{task.weight}</span>
+          </div>
+          <div className="flex flex-col gap-0.5 flex-1 text-right">
+             <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Last Updated</span>
+             <span className="text-xs font-medium text-muted-foreground/80">{new Date(task.updatedAt).toLocaleDateString()}</span>
+          </div>
+        </div>
+        {deleteState && <p className="text-sm text-destructive mt-3 font-medium bg-destructive/10 p-2 rounded border border-destructive/20">{deleteState}</p>}
       </CardContent>
     </Card>
   );
