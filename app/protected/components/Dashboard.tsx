@@ -21,7 +21,9 @@ export default function Dashboard({ initialTasks }: { initialTasks: Task[] }) {
   return (
     <div className="flex flex-col gap-8 w-full max-w-4xl mx-auto">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-primary bg-clip-text text-transparent">
+          Dashboard
+        </h1>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button className="flex items-center gap-2">
