@@ -62,6 +62,7 @@ export async function createTask(
   const raw = {
     userId: user.id,
     title: formData.get("title") ?? undefined,
+    description: formData.get("description") ?? undefined,
     importance: formData.has("importance")
       ? Number(formData.get("importance"))
       : undefined,
@@ -139,6 +140,7 @@ export async function updateTask(
 
   const raw = {
     title: formData.get("title") ?? undefined,
+    description: formData.get("description") ?? undefined,
     importance: formData.has("importance")
       ? Number(formData.get("importance"))
       : undefined,
@@ -196,3 +198,36 @@ export async function updateTask(
     return { success: false, error: "Failed to delete task" };
     }
     }
+
+/** 
+ * Mock AI Analysis of tasks. 
+ * In a real implementation, this would call an LLM (OpenAI, Gemini, etc.)
+ */
+export async function getAIRecommendation(tasks: Task[]): Promise<ActionResult<string>> {
+  if (tasks.length === 0) return { success: true, data: "No tasks to analyze." };
+
+  try {
+    // In a real scenario, you'd call a provider like Google's Gemini or OpenAI here.
+    // Example logic if we had the key:
+    // const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    // const prompt = `Analyze these tasks and provide a strategic recommendation on what to focus on first: ${JSON.stringify(tasks)}`;
+    // const result = await model.generateContent(prompt);
+    
+    // Simulate a delay for "AI thinking"
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    const recommendations = [
+      "Based on your current load, prioritize the task with the highest Focus Score to maximize productivity.",
+      "Consider grouping related tasks today to reduce context-switching overhead.",
+      "Tackle your most complex task first while your energy levels are high.",
+      "Your upcoming deadline is approaching fast. Focus on completing that specific task before starting new ones."
+    ];
+    
+    return { 
+      success: true, 
+      data: recommendations[Math.floor(Math.random() * recommendations.length)] 
+    };
+  } catch (error) {
+    return { success: false, error: "AI analysis failed." };
+  }
+}

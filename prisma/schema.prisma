@@ -21,15 +21,16 @@ datasource db {
 }
 
 model Task {
-  id         String    @id @default(uuid())
-  userId     String    @map("user_id")
-  title      String
-  importance Int       @default(5)
-  weight     Int       @default(5)
-  deadline   DateTime? @db.Timestamptz
-  position   Int       @default(0)
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  title       String
+  description String?   @db.Text
+  importance  Int       @default(5)
+  weight      Int       @default(5)
+  deadline    DateTime? @db.Timestamptz
+  position    Int       @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   @@map("tasks")
 }

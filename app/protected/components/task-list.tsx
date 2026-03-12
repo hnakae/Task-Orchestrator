@@ -2,9 +2,10 @@
 
 import { useActionState, useState, useMemo, useEffect } from "react";
 import type { Task } from "@/lib/generated/prisma/client";
-import { updateTask, deleteTask, updateTaskOrder } from "../actions";
+import { updateTask, deleteTask, updateTaskOrder, getAIRecommendation } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "./ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -32,7 +33,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Sparkles } from "lucide-react";
+import { GripVertical, Sparkles, Shuffle } from "lucide-react";
 
 function formatDate(date: Date | null) {
   if (!date) return "—";
@@ -89,6 +90,16 @@ function TaskItem({
               <Label htmlFor={`edit-title-${task.id}`} className="text-sm font-semibold text-foreground/80">Title</Label>
               <Input id={`edit-title-${task.id}`} name="title" defaultValue={task.title} maxLength={255} className="bg-background border-input focus:border-primary focus:ring-primary/20" />
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor={`edit-description-${task.id}`} className="text-sm font-semibold text-foreground/80">Description</Label>
+              <Textarea 
+                id={`edit-description-${task.id}`} 
+                name="description" 
+                defaultValue={task.description || ""} 
+                className="bg-background border-input"
+                rows={2}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor={`edit-importance-${task.id}`} className="text-sm font-semibold text-foreground/80">Importance (1-10)</Label>
@@ -144,6 +155,11 @@ function TaskItem({
             <CardTitle className="text-base font-bold leading-tight truncate group-hover:text-primary transition-colors">
               {task.title}
             </CardTitle>
+            {task.description && (
+              <p className="text-xs text-muted-foreground line-clamp-1 italic">
+                {task.description}
+              </p>
+            )}
             <div className="flex items-center gap-3">
               <Badge variant="outline" className="text-[11px] font-bold px-2 py-0.5 border-primary/30 text-primary bg-primary/5">
                 Focus Score: {task.importance * task.weight}
@@ -231,6 +247,8 @@ function SortableTaskItem({ task }: { task: Task }) {
 export function TaskList({ initialTasks }: { initialTasks: Task[] }) {
   const [tasks, setTasks] = useState(initialTasks);
   const [isSorting, setIsSorting] = useState(false);
+  const [isShuffling, setIsShuffling] = useState(false);
+  const [aiRecommendation, setAIRecommendation] = useState<string | null>(null);
 
   useEffect(() => {
     setTasks(initialTasks);
@@ -245,6 +263,7 @@ export function TaskList({ initialTasks }: { initialTasks: Task[] }) {
 
   async function handleSortByFocusScore() {
     setIsSorting(true);
+    setAIRecommendation(null);
     const sortedTasks = [...tasks].sort((a, b) => {
       const scoreA = a.importance * a.weight;
       const scoreB = b.importance * b.weight;
@@ -252,6 +271,11 @@ export function TaskList({ initialTasks }: { initialTasks: Task[] }) {
     });
     
     setTasks(sortedTasks);
+
+    const result = await getAIRecommendation(tasks);
+    if (result.success) {
+      setAIRecommendation(result.data);
+    }
 
     // Update positions in background
     const taskPositions = sortedTasks.map((task, index) => ({
@@ -261,6 +285,22 @@ export function TaskList({ initialTasks }: { initialTasks: Task[] }) {
     
     await updateTaskOrder(taskPositions);
     setIsSorting(false);
+  }
+
+  async function handleShuffle() {
+    setIsShuffling(true);
+    const shuffledTasks = [...tasks].sort(() => Math.random() - 0.5);
+    
+    setTasks(shuffledTasks);
+
+    // Update positions in background
+    const taskPositions = shuffledTasks.map((task, index) => ({
+      id: task.id,
+      position: index,
+    }));
+    
+    await updateTaskOrder(taskPositions);
+    setIsShuffling(false);
   }
 
   async function handleDragEnd(event: DragEndEvent) {
@@ -289,23 +329,53 @@ export function TaskList({ initialTasks }: { initialTasks: Task[] }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {aiRecommendation && (
+        <div className="bg-primary/10 border border-primary/20 p-4 rounded-lg flex gap-3 items-start animate-in fade-in slide-in-from-top-2 duration-500">
+          <Sparkles className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+          <div className="flex flex-col gap-1">
+            <span className="text-xs font-bold text-primary uppercase tracking-wider">AI Recommendation</span>
+            <p className="text-sm text-foreground/90 font-medium italic">"{aiRecommendation}"</p>
+          </div>
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="ml-auto h-6 w-6 text-muted-foreground hover:bg-primary/10" 
+            onClick={() => setAIRecommendation(null)}
+          >
+            <span className="sr-only">Dismiss</span>
+            <span aria-hidden>×</span>
+          </Button>
+        </div>
+      )}
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-semibold">Your Tasks</h2>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={handleSortByFocusScore}
-          disabled={isSorting}
-          className="relative overflow-hidden group border-primary/20 hover:border-primary/50 transition-all duration-300 bg-gradient-to-r from-background to-muted hover:to-primary/5 px-4"
-        >
-          <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-          <div className="relative flex items-center gap-2">
-            <Sparkles className="h-3.5 w-3.5 text-primary animate-pulse" />
-            <span className="font-medium bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">
-              {isSorting ? "Sorting..." : "AI Optimize Focus"}
-            </span>
-          </div>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleShuffle}
+            disabled={isShuffling || isSorting}
+            className="border-primary/20 hover:border-primary/50 transition-all duration-300"
+          >
+            <Shuffle className={cn("h-3.5 w-3.5 mr-2 text-primary", isShuffling && "animate-spin")} />
+            {isShuffling ? "Shuffling..." : "Shuffle"}
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleSortByFocusScore}
+            disabled={isSorting || isShuffling}
+            className="relative overflow-hidden group border-primary/20 hover:border-primary/50 transition-all duration-300 bg-gradient-to-r from-background to-muted hover:to-primary/5 px-4"
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            <div className="relative flex items-center gap-2">
+              <Sparkles className="h-3.5 w-3.5 text-primary animate-pulse" />
+              <span className="font-medium bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">
+                {isSorting ? "Sorting..." : "AI Optimize Focus"}
+              </span>
+            </div>
+          </Button>
+        </div>
       </div>
 
       <DndContext
