@@ -20,17 +20,53 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+model Course {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  name      String
+  rubric    Json?    // Optional JSON for grading rubric details
+  tasks     Task[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("courses")
+}
+
 model Task {
-  id          String    @id @default(uuid())
-  userId      String    @map("user_id")
+  id          String       @id @default(uuid())
+  userId      String       @map("user_id")
   title       String
-  description String?   @db.Text
-  importance  Int       @default(5)
-  weight      Int       @default(5)
-  deadline    DateTime? @db.Timestamptz
-  position    Int       @default(0)
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  description String?      @db.Text
+  importance  Int          @default(5) // Represents "Points"
+  weight      Int          @default(5) // Repurposed or ignored
+  deadline    DateTime?    @db.Timestamptz
+  position    Int          @default(0)
+  type        String       @default("HOMEWORK")
+  isCompleted Boolean      @default(false) @map("is_completed")
+  estimatedPomodoros Int   @default(1) @map("estimated_pomodoros")
+  
+  courseId    String?      @map("course_id")
+  course      Course?      @relation(fields: [courseId], references: [id])
+
+  parentId    String?      @map("parent_id")
+  parent      Task?        @relation("SubTasks", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Task[]       @relation("SubTasks")
+
+  attachments Attachment[]
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
 
   @@map("tasks")
+}
+
+model Attachment {
+  id        String   @id @default(uuid())
+  taskId    String   @map("task_id")
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  name      String
+  url       String
+  type      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("attachments")
 }

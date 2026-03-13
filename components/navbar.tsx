@@ -24,12 +24,13 @@ async function NavContent() {
         </Link>
         
         {user && (
-          <div className="hidden md:flex items-center gap-6">
+          <div className="flex items-center gap-6">
             <Link 
               href="/protected" 
-              className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
+              className="text-sm font-semibold text-muted-foreground transition-all hover:text-primary relative group/link px-1 py-0.5"
             >
               Dashboard
+              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all duration-300 group-hover/link:w-full" />
             </Link>
           </div>
         )}

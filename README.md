@@ -5,7 +5,7 @@
 hosted on vercel: https://task-orchestrator-peach.vercel.app/
 
 run: ``` cd task-orchestrator
-         npm install
+         npm install b
          npm run dev ```
 
 The Workflow:
@@ -17,7 +17,6 @@ The Workflow:
       database column immediately, with zero manual
       typing.
 
-
   Summary of Benefits in this Project:
    - Zero Desync: You can't accidentally send a
      string to a numeric database column.
@@ -26,3 +25,4 @@ The Workflow:
    - Fail-Fast: Errors are caught at the API
      boundary (Server Actions) before they cause
      weird bugs in the database or UI.
+

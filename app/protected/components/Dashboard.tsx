@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { TaskList } from "./task-list";
 import { TaskCreateForm } from "./task-create-form";
-import type { Task } from "@/lib/generated/prisma/client";
+import type { TaskWithAttachments } from "../actions";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,7 +15,7 @@ import {
   DialogTrigger,
 } from "./ui/dialog";
 
-export default function Dashboard({ initialTasks }: { initialTasks: Task[] }) {
+export default function Dashboard({ initialTasks }: { initialTasks: TaskWithAttachments[] }) {
   const [open, setOpen] = useState(false);
 
   return (
