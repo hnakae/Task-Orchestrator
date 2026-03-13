@@ -1,18 +1,17 @@
-const { PrismaClient } = require("./lib/generated/prisma");
-const prisma = new PrismaClient();
+const fs = require('node:fs');
+const path = require('node:path');
 
-async function main() {
-  try {
-    console.log("Updating existing tasks with type 'GENERAL' to 'ASSIGNMENT'...");
-    // We use a raw query because the generated client might already be in the "new" state
-    // where 'GENERAL' is not in the type definition, causing TS/runtime errors if used normally.
-    const result = await prisma.$executeRaw`UPDATE tasks SET type = 'ASSIGNMENT' WHERE type::text = 'GENERAL'`;
-    console.log(`Successfully updated ${result} tasks.`);
-  } catch (e) {
-    console.error("Error updating tasks:", e);
-  } finally {
-    await prisma.$disconnect();
-  }
+const filePath = path.join(__dirname, 'lib', 'generated', 'zod', 'index.ts');
+
+if (fs.existsSync(filePath)) {
+  let content = fs.readFileSync(filePath, 'utf8');
+  
+  // Fix 'Prisma.NullTypes.DbNull' being used as a type instead of 'typeof Prisma.NullTypes.DbNull'
+  content = content.replace(/\| Prisma\.NullTypes\.DbNull/g, '| typeof Prisma.NullTypes.DbNull');
+  content = content.replace(/\| Prisma\.NullTypes\.JsonNull/g, '| typeof Prisma.NullTypes.JsonNull');
+  
+  fs.writeFileSync(filePath, content);
+  console.log('Successfully patched zod-prisma-types error.');
+} else {
+  console.error('Generated zod file not found at:', filePath);
 }
-
-main();

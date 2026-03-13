@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { JsonValue, InputJsonValue, objectEnumValues } from '@prisma/client/runtime/library';
-import type { Prisma } from '../prisma/client';
+import { Prisma } from '../prisma/client';
 
 /////////////////////////////////////////
 // HELPER FUNCTIONS
@@ -9,15 +8,15 @@ import type { Prisma } from '../prisma/client';
 // JSON
 //------------------------------------------------------
 
-export type NullableJsonInput = JsonValue | null | 'JsonNull' | 'DbNull' | typeof objectEnumValues.instances.DbNull | typeof objectEnumValues.instances.JsonNull;
+export type NullableJsonInput = Prisma.JsonValue | null | 'JsonNull' | 'DbNull' | Prisma.NullTypes.DbNull | Prisma.NullTypes.JsonNull;
 
 export const transformJsonNull = (v?: NullableJsonInput) => {
-  if (!v || v === 'DbNull') return typeof objectEnumValues.instances.DbNull;
-  if (v === 'JsonNull') return typeof objectEnumValues.instances.JsonNull;
+  if (!v || v === 'DbNull') return Prisma.NullTypes.DbNull;
+  if (v === 'JsonNull') return Prisma.NullTypes.JsonNull;
   return v;
 };
 
-export const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+export const JsonValueSchema: z.ZodType<Prisma.JsonValue> = z.lazy(() =>
   z.union([
     z.string(),
     z.number(),
@@ -37,7 +36,7 @@ export const NullableJsonValue = z
 
 export type NullableJsonValueType = z.infer<typeof NullableJsonValue>;
 
-export const InputJsonValueSchema: z.ZodType<InputJsonValue> = z.lazy(() =>
+export const InputJsonValueSchema: z.ZodType<Prisma.InputJsonValue> = z.lazy(() =>
   z.union([
     z.string(),
     z.number(),
@@ -65,11 +64,11 @@ export const AttachmentScalarFieldEnumSchema = z.enum(['id','taskId','name','url
 
 export const SortOrderSchema = z.enum(['asc','desc']);
 
-export const NullableJsonNullValueInputSchema: z.ZodType<Prisma.NullableJsonNullValueInput> = z.enum(['DbNull','JsonNull',]).transform((value) => value === 'JsonNull' ? objectEnumValues.instances.JsonNull : value === 'DbNull' ? objectEnumValues.instances.DbNull : value);
+export const NullableJsonNullValueInputSchema: z.ZodType<Prisma.NullableJsonNullValueInput> = z.enum(['DbNull','JsonNull',]).transform((value) => value === 'JsonNull' ? Prisma.JsonNull : value === 'DbNull' ? Prisma.DbNull : value);
 
 export const QueryModeSchema = z.enum(['default','insensitive']);
 
-export const JsonNullValueFilterSchema: z.ZodType<Prisma.JsonNullValueFilter> = z.enum(['DbNull','JsonNull','AnyNull',]).transform((value) => value === 'JsonNull' ? objectEnumValues.instances.JsonNull : value === 'DbNull' ? objectEnumValues.instances.DbNull : value === 'AnyNull' ? objectEnumValues.instances.AnyNull : value);
+export const JsonNullValueFilterSchema: z.ZodType<Prisma.JsonNullValueFilter> = z.enum(['DbNull','JsonNull','AnyNull',]).transform((value) => value === 'JsonNull' ? Prisma.JsonNull : value === 'DbNull' ? Prisma.DbNull : value === 'AnyNull' ? Prisma.AnyNull : value);
 
 export const NullsOrderSchema = z.enum(['first','last']);
 /////////////////////////////////////////
