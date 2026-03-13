@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { TaskList } from "./task-list";
-import { TaskCreateForm } from "./task-create-form";
 import { CourseManager } from "./course-manager";
-import type { TaskWithAttachments } from "../actions";
+import { TaskCreateForm } from "./task-create-form";
 import { Plus, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,7 +14,7 @@ import {
   DialogTrigger,
 } from "./ui/dialog";
 
-export default function Dashboard({ initialTasks }: { initialTasks: TaskWithAttachments[] }) {
+export default function Dashboard({ children }: { children: React.ReactNode }) {
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [coursesDialogOpen, setCoursesDialogOpen] = useState(false);
 
@@ -69,7 +67,7 @@ export default function Dashboard({ initialTasks }: { initialTasks: TaskWithAtta
         </div>
       </div>
 
-      <TaskList initialTasks={initialTasks} />
+      {children}
     </div>
   );
 }

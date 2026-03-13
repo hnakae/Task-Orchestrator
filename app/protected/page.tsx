@@ -3,8 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { Suspense } from "react";
 import { getTasks } from "./actions";
 import Dashboard from "./components/Dashboard";
+import { TaskList } from "./components/task-list";
+import { DashboardSkeleton } from "./components/dashboard-skeleton";
 
-async function ProtectedContent() {
+async function TaskListContainer() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -17,13 +19,15 @@ async function ProtectedContent() {
   const result = await getTasks();
   const tasks = result.success ? result.data : [];
 
-  return <Dashboard initialTasks={tasks} />;
+  return <TaskList initialTasks={tasks} />;
 }
 
 export default function ProtectedPage() {
   return (
-    <Suspense fallback={<div className="text-muted-foreground">Loading…</div>}>
-      <ProtectedContent />
-    </Suspense>
+    <Dashboard>
+      <Suspense fallback={<DashboardSkeleton />}>
+        <TaskListContainer />
+      </Suspense>
+    </Dashboard>
   );
 }
