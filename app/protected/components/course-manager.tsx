@@ -90,7 +90,7 @@ export function CourseManager() {
 
   const startEditing = (course: any) => {
     setCourseName(course.name);
-    const rubric = course.rubric as Record<string, number>;
+    const rubric = (course.rubric || {}) as Record<string, number>;
     const items = Object.entries(rubric).map(([id, weight]) => ({
       id,
       label: id.charAt(0) + id.slice(1).toLowerCase().replace(/_/g, " "),

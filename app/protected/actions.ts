@@ -50,9 +50,9 @@ export async function createCourse(name: string, rubric?: any): Promise<ActionRe
     });
     revalidatePath("/protected");
     return { success: true, data: course };
-  } catch (error) {
+  } catch (error: any) {
     console.error("Create course error:", error);
-    return { success: false, error: "Failed to create course" };
+    return { success: false, error: `Failed to create course: ${error.message || "Unknown error"}` };
   }
 }
 
