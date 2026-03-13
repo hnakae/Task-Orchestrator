@@ -261,9 +261,9 @@ export function CourseManager() {
           </CardHeader>
           <CardContent className="pt-6 flex flex-col gap-6">
             <div className="grid gap-2">
-              <Label htmlFor="courseName" className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Course Identity</Label>
+              <Label htmlFor="course-name-field" className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Course Identity</Label>
               <Input 
-                id="courseName" 
+                id="course-name-field" 
                 placeholder="e.g. CS101: Introduction to AI" 
                 value={courseName}
                 onChange={(e) => setCourseName(e.target.value)}
@@ -274,13 +274,14 @@ export function CourseManager() {
             <div className="flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Grading Rubric</Label>
+                  <Label id="manager-rubric-label" className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Grading Rubric</Label>
                   <Button 
                     type="button" 
                     variant="secondary"
                     size="icon"
                     onClick={addRubricSection}
                     className="h-6 w-6 rounded-full bg-primary/10 hover:bg-primary/20 text-primary transition-colors"
+                    aria-labelledby="manager-rubric-label"
                   >
                     <Plus className="h-3.5 w-3.5" />
                   </Button>
@@ -290,10 +291,12 @@ export function CourseManager() {
                 </Badge>
               </div>
 
-              <div className="grid gap-2.5">
+              <div className="grid gap-2.5" role="group" aria-labelledby="manager-rubric-label">
                 {rubricItems.map((item, index) => (
                   <div key={item.id} className="flex items-center gap-3 animate-in fade-in slide-in-from-left-2 duration-200">
                     <Input
+                      id={`manager-rubric-label-${item.id}`}
+                      aria-label={`Rubric item ${index + 1} name`}
                       className="h-9 text-xs font-bold flex-1 bg-muted/20 border-muted"
                       value={item.label}
                       onChange={(e) => updateRubricItem(index, "label", e.target.value)}
@@ -301,6 +304,8 @@ export function CourseManager() {
                     />
                     <div className="flex items-center gap-2 w-20 shrink-0">
                       <Input
+                        id={`manager-rubric-weight-${item.id}`}
+                        aria-label={`Rubric item ${index + 1} weight percentage`}
                         type="number"
                         min={0}
                         max={100}
@@ -316,6 +321,7 @@ export function CourseManager() {
                       size="icon" 
                       className="h-9 w-9 text-muted-foreground hover:text-destructive shrink-0"
                       onClick={() => deleteRubricItem(index)}
+                      aria-label={`Delete rubric item ${item.label}`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

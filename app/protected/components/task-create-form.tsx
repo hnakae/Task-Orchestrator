@@ -245,7 +245,7 @@ export function TaskCreateForm({ onSuccess }: { onSuccess?: () => void }) {
       {/* Course Selection */}
       <div className="grid gap-1.5">
         <div className="flex items-center justify-between">
-          <Label htmlFor="course" className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Class / Course</Label>
+          <Label htmlFor="course-select" className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Class / Course</Label>
           <Dialog open={isAddingCourse} onOpenChange={setIsAddingCourse}>
             <DialogTrigger asChild>
               <button type="button" className="text-[10px] font-bold text-primary flex items-center gap-1 hover:underline">
@@ -262,9 +262,9 @@ export function TaskCreateForm({ onSuccess }: { onSuccess?: () => void }) {
               </DialogHeader>
               <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
                 <div className="grid gap-2">
-                  <Label htmlFor="name" className="text-xs font-bold uppercase">Course Name</Label>
+                  <Label htmlFor="new-course-name" className="text-xs font-bold uppercase">Course Name</Label>
                   <Input 
-                    id="name" 
+                    id="new-course-name" 
                     placeholder="e.g. CS101: Introduction to AI" 
                     value={newCourseName}
                     onChange={(e) => setNewCourseName(e.target.value)}
@@ -274,11 +274,12 @@ export function TaskCreateForm({ onSuccess }: { onSuccess?: () => void }) {
                 <div className="border-t pt-4 mt-2">
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <Label className="text-xs font-bold uppercase text-primary">Grading Rubric (%)</Label>
+                      <Label id="rubric-label" className="text-xs font-bold uppercase text-primary">Grading Rubric (%)</Label>
                       <button 
                         type="button" 
                         onClick={addRubricSection}
                         className="text-primary hover:text-primary/80"
+                        aria-labelledby="rubric-label"
                       >
                         <PlusCircle className="h-4 w-4" />
                       </button>
@@ -288,10 +289,12 @@ export function TaskCreateForm({ onSuccess }: { onSuccess?: () => void }) {
                     </Badge>
                   </div>
                   
-                  <div className="grid gap-3">
+                  <div className="grid gap-3" role="group" aria-labelledby="rubric-label">
                     {rubricItems.map((item, index) => (
                       <div key={item.id} className="flex items-center gap-3">
                         <Input
+                          id={`rubric-label-${item.id}`}
+                          aria-label={`Rubric item ${index + 1} name`}
                           className="h-8 text-[11px] font-medium flex-1"
                           value={item.label}
                           onChange={(e) => updateRubricItem(index, "label", e.target.value)}
@@ -299,6 +302,8 @@ export function TaskCreateForm({ onSuccess }: { onSuccess?: () => void }) {
                         />
                         <div className="flex items-center gap-2 w-20">
                           <Input
+                            id={`rubric-weight-${item.id}`}
+                            aria-label={`Rubric item ${index + 1} weight percentage`}
                             type="number"
                             min={0}
                             max={100}
@@ -314,6 +319,7 @@ export function TaskCreateForm({ onSuccess }: { onSuccess?: () => void }) {
                           size="icon" 
                           className="h-8 w-8 text-muted-foreground hover:text-destructive"
                           onClick={() => deleteRubricItem(index)}
+                          aria-label={`Delete rubric item ${item.label}`}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -335,7 +341,7 @@ export function TaskCreateForm({ onSuccess }: { onSuccess?: () => void }) {
           </Dialog>
         </div>
         <Select value={selectedCourseId} onValueChange={setSelectedCourseId}>
-          <SelectTrigger className="w-full bg-background border-muted shadow-sm h-9">
+          <SelectTrigger id="course-select" className="w-full bg-background border-muted shadow-sm h-9">
             <SelectValue placeholder="Select course (optional)" />
           </SelectTrigger>
           <SelectContent>
@@ -351,13 +357,14 @@ export function TaskCreateForm({ onSuccess }: { onSuccess?: () => void }) {
 
       {/* Category Selection */}
       <div className="flex flex-col gap-2">
-        <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Academic Category</Label>
-        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5 md:grid-cols-7">
+        <Label id="academic-category-label" className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Academic Category</Label>
+        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5 md:grid-cols-7" role="radiogroup" aria-labelledby="academic-category-label">
           {availableCategories.map((cat) => (
             <button
               key={cat.id}
               type="button"
               onClick={() => setTaskType(cat.id)}
+              aria-pressed={taskType === cat.id}
               className={cn(
                 "flex flex-col items-center justify-center gap-1 p-1.5 rounded-lg border-2 transition-all group",
                 taskType === cat.id 
