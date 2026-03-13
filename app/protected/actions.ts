@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { TaskUncheckedCreateInputSchema, TaskUncheckedUpdateInputSchema } from "@/lib/generated/zod";
-import type { Task, Attachment, Course } from "@/lib/generated/prisma/client";
+import type { Task, Attachment, Course } from "@prisma/client";
 
 export type ActionResult<T = void> =
   | { success: true; data: T }
