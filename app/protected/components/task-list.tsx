@@ -10,6 +10,7 @@ import {
   decomposeTask, 
   toggleTaskCompletion, 
   getCourses,
+  addTaskDuration,
   TaskWithAttachments 
 } from "../actions";
 import { Button } from "@/components/ui/button";
@@ -74,7 +75,8 @@ import {
   FileCheck,
   GraduationCap,
   Bell,
-  ArrowRight
+  ArrowRight,
+  Target
 } from "lucide-react";
 import { 
   Select, 
@@ -120,7 +122,7 @@ function TaskItem({
   dragHandleProps, 
   isDragging 
 }: { 
-  task: TaskWithAttachments; 
+  task: TaskWithAttachments & { actualSeconds?: number }; 
   dragHandleProps?: any;
   isDragging?: boolean;
 }) {
@@ -197,8 +199,17 @@ function TaskItem({
     }
   }, [task.isCompleted]);
 
+  const actualTotalSeconds = task.actualSeconds || 0;
+
+  const formatSeconds = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
   const typeInfo = getTaskTypeInfo(task.type);
   const TypeIcon = typeInfo.icon;
+
 
   if (editing) {
     return (
@@ -381,8 +392,12 @@ function TaskItem({
                 <Trophy className="h-3 w-3" />
                 {task.importance} pts
               </Badge>
+              <Badge variant="secondary" className="text-[10px] h-5 gap-1.5 bg-orange-50 text-orange-700 border-orange-100 font-bold">
+                <Timer className="h-3 w-3" />
+                {formatSeconds(actualTotalSeconds)} / {task.estimatedPomodoros * 25}m
+              </Badge>
               {task.deadline && (
-                <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
+                <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5 ml-1">
                   <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
                   {formatDate(task.deadline)}
                 </span>
@@ -391,20 +406,22 @@ function TaskItem({
           </div>
         </div>
         <div className="flex gap-2 shrink-0">
-          <Button 
-            type="button" 
-            variant={showTimer ? "default" : "secondary"}
-            size="sm" 
-            onClick={() => setShowTimer(!showTimer)} 
-            className={cn(
-              "h-8 text-xs font-bold transition-all border-transparent",
-              showTimer ? "bg-orange-500 hover:bg-orange-600 text-white" : "hover:bg-orange-500/10 hover:text-orange-600"
-            )}
-            title="Pomodoro Timer"
-          >
-            <Timer className={cn("h-3.5 w-3.5 mr-1", showTimer && "animate-pulse")} />
-            {showTimer ? "Timer Open" : "Focus"}
-          </Button>
+          {!task.isCompleted && (
+            <Button 
+              type="button" 
+              variant={showTimer ? "default" : "secondary"}
+              size="sm" 
+              onClick={() => setShowTimer(!showTimer)} 
+              className={cn(
+                "h-8 text-xs font-bold transition-all border-transparent",
+                showTimer ? "bg-orange-500 hover:bg-orange-600 text-white" : "hover:bg-orange-500/10 hover:text-orange-600"
+              )}
+              title="Pomodoro Timer"
+            >
+              <Timer className={cn("h-3.5 w-3.5 mr-1", showTimer && "animate-pulse")} />
+              {showTimer ? "Timer Open" : "Focus"}
+            </Button>
+          )}
           <Button 
             type="button" 
             variant="secondary" 
@@ -450,6 +467,11 @@ function TaskItem({
                   taskId={task.id} 
                   taskTitle={task.title} 
                   subTaskTitle={firstIncompleteChild?.title}
+                  onTimeUpdate={async (seconds) => {
+                    // Always update the sub-task if we're working on one
+                    const targetId = firstIncompleteChild ? firstIncompleteChild.id : task.id;
+                    await addTaskDuration(targetId, seconds);
+                  }}
                   onSessionComplete={async (isDone) => {
                     if (!isDone) return;
                     
@@ -493,51 +515,57 @@ function TaskItem({
             
             {isStepsExpanded && (
               <div className="flex flex-col gap-2 ml-4 border-l-2 border-primary/10 pl-4 animate-in slide-in-from-top-1 duration-200">
-                {task.children.map((child) => (
-                  <div key={child.id} className={cn(
-                    "flex flex-col gap-1 p-2 rounded-lg transition-all group/sub",
-                    child.isCompleted ? "bg-muted/50 opacity-75" : "bg-primary/5 border border-primary/10"
-                  )}>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <button 
-                          onClick={async () => {
-                            const res = await toggleTaskCompletion(child.id, !child.isCompleted);
-                            if (!res.success) toast.error(res.error);
-                          }}
-                          className="transition-transform active:scale-90"
-                        >
-                          {child.isCompleted ? (
-                            <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-                          ) : (
-                            <Circle className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
-                          )}
-                        </button>
-                        <span className={cn(
-                          "text-xs font-bold",
-                          child.isCompleted ? "line-through text-muted-foreground" : "text-foreground/90"
-                        )}>{child.title}</span>
-                      </div>
-                      <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-background font-bold uppercase border-primary/20">Step</Badge>
-                    </div>
-                    {child.attachments && child.attachments.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1 ml-5">
-                        {child.attachments.map((att) => (
-                          <a 
-                            key={att.id}
-                            href={att.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-1 text-[9px] text-muted-foreground hover:text-primary transition-colors"
+                {task.children.map((child) => {
+                  const childSeconds = child.actualSeconds || 0;
+                  return (
+                    <div key={child.id} className={cn(
+                      "flex flex-col gap-1 p-2 rounded-lg transition-all group/sub",
+                      child.isCompleted ? "bg-muted/50 opacity-75" : "bg-primary/5 border border-primary/10"
+                    )}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={async () => {
+                              const res = await toggleTaskCompletion(child.id, !child.isCompleted);
+                              if (!res.success) toast.error(res.error);
+                            }}
+                            className="transition-transform active:scale-90"
                           >
-                            <Paperclip className="h-2.5 w-2.5" />
-                            <span className="truncate max-w-[80px]">{att.name}</span>
-                          </a>
-                        ))}
+                            {child.isCompleted ? (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                            ) : (
+                              <Circle className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
+                            )}
+                          </button>
+                          <span className={cn(
+                            "text-xs font-bold",
+                            child.isCompleted ? "line-through text-muted-foreground" : "text-foreground/90"
+                          )}>{child.title}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] font-bold text-muted-foreground">{formatSeconds(childSeconds)} spent</span>
+                          <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-background font-bold uppercase border-primary/20">Step</Badge>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                ))}
+                      {child.attachments && child.attachments.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1 ml-5">
+                          {child.attachments.map((att) => (
+                            <a 
+                              key={att.id}
+                              href={att.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-[9px] text-muted-foreground hover:text-primary transition-colors"
+                            >
+                              <Paperclip className="h-2.5 w-2.5" />
+                              <span className="truncate max-w-[80px]">{att.name}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -582,6 +610,12 @@ export function TaskList({ initialTasks }: { initialTasks: TaskWithAttachments[]
 
   useEffect(() => {
     setTasks(initialTasks);
+  }, [initialTasks]);
+
+  const completionRate = useMemo(() => {
+    if (initialTasks.length === 0) return 0;
+    const completedCount = initialTasks.filter(t => t.isCompleted).length;
+    return Math.round((completedCount / initialTasks.length) * 100);
   }, [initialTasks]);
 
   const sensors = useSensors(
@@ -733,12 +767,28 @@ export function TaskList({ initialTasks }: { initialTasks: TaskWithAttachments[]
       )}
 
       <div className="flex justify-between items-center mt-2">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          Your Tasks
-          <Badge variant="secondary" className="rounded-full px-2 py-0 h-5 min-w-[1.25rem] flex items-center justify-center text-[10px]">
-            {tasks.length}
-          </Badge>
-        </h2>
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            Your Tasks
+            <Badge variant="secondary" className="rounded-full px-2 py-0 h-5 min-w-[1.25rem] flex items-center justify-center text-[10px]">
+              {tasks.length}
+            </Badge>
+          </h2>
+          {completionRate !== null && (
+            <div className="flex items-center gap-2 px-3 py-1 bg-primary/5 border border-primary/10 rounded-full">
+              <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+              <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Completion:</span>
+              <span className={cn(
+                "text-[11px] font-black",
+                completionRate >= 80 ? "text-green-600" :
+                completionRate >= 50 ? "text-yellow-600" :
+                "text-red-600"
+              )}>
+                {completionRate}%
+              </span>
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           <Button 
             variant="ghost" 

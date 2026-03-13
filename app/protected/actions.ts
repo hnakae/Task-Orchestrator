@@ -75,6 +75,27 @@ export async function updateCourse(id: string, name: string, rubric: any): Promi
   }
 }
 
+/** Delete a course */
+export async function deleteCourse(id: string): Promise<ActionResult<void>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Not authenticated" };
+
+  try {
+    // Note: This will fail if there are tasks linked to this course because of foreign key constraints
+    // unless we use onDelete: SetNull or Cascade in schema. 
+    // Checking schema... it's default (restrict usually in prisma if not specified)
+    await prisma.course.delete({
+      where: { id, userId: user.id }
+    });
+    revalidatePath("/protected");
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error("Delete course error:", error);
+    return { success: false, error: "Failed to delete course. Ensure no tasks are linked to it." };
+  }
+}
+
 /** Get all top-level tasks for the current user, including their sub-tasks */
 export async function getTasks(): Promise<ActionResult<TaskWithAttachments[]>> {
   const supabase = await createClient();
@@ -319,7 +340,10 @@ export async function toggleTaskCompletion(id: string, isCompleted: boolean): Pr
     // Update the task itself
     await prisma.task.update({
       where: { id, userId: user.id },
-      data: { isCompleted }
+      data: { 
+        isCompleted,
+        completedAt: isCompleted ? new Date() : null
+      }
     });
 
     // Handle parent-child completion sync
@@ -337,14 +361,20 @@ export async function toggleTaskCompletion(id: string, isCompleted: boolean): Pr
           // All sub-tasks are complete, mark parent as complete
           await prisma.task.update({
             where: { id: task.parentId, userId: user.id },
-            data: { isCompleted: true }
+            data: { 
+              isCompleted: true,
+              completedAt: new Date()
+            }
           });
         }
       } else {
         // If marking as incomplete, the parent must also be incomplete
         await prisma.task.update({
           where: { id: task.parentId, userId: user.id },
-          data: { isCompleted: false }
+          data: { 
+            isCompleted: false,
+            completedAt: null
+          }
         });
       }
     }
@@ -354,6 +384,42 @@ export async function toggleTaskCompletion(id: string, isCompleted: boolean): Pr
   } catch (error) {
     console.error("Toggle task error:", error);
     return { success: false, error: "Failed to toggle task" };
+  }
+}
+
+/** Record time spent on a task in seconds. If it's a sub-task, also add to parent. */
+export async function addTaskDuration(taskId: string, seconds: number): Promise<ActionResult<void>> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Not authenticated" };
+
+  try {
+    const task = await prisma.task.findUnique({
+      where: { id: taskId, userId: user.id },
+      select: { id: true, parentId: true }
+    });
+
+    if (!task) return { success: false, error: "Task not found" };
+
+    // Update the task/sub-task itself
+    await prisma.task.update({
+      where: { id: taskId, userId: user.id },
+      data: { actualSeconds: { increment: seconds } }
+    });
+
+    // If it has a parent, also increment the parent's total time
+    if (task.parentId) {
+      await prisma.task.update({
+        where: { id: task.parentId, userId: user.id },
+        data: { actualSeconds: { increment: seconds } }
+      });
+    }
+
+    revalidatePath("/protected");
+    return { success: true, data: undefined };
+  } catch (error) {
+    console.error("Add task duration error:", error);
+    return { success: false, error: "Failed to update task duration" };
   }
 }
 

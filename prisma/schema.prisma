@@ -43,7 +43,9 @@ model Task {
   position    Int          @default(0)
   type        String       @default("HOMEWORK")
   isCompleted Boolean      @default(false) @map("is_completed")
+  completedAt DateTime?    @map("completed_at")
   estimatedPomodoros Int   @default(1) @map("estimated_pomodoros")
+  actualSeconds      Int   @default(0) @map("actual_seconds")
   
   courseId    String?      @map("course_id")
   course      Course?      @relation(fields: [courseId], references: [id])

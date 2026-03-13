@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useEffect } from "react";
+import { useActionState, useState, useEffect, useMemo } from "react";
 import { createTask, getCourses, createCourse, updateCourse } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,8 @@ import {
   Trophy, 
   FileCheck, 
   Bell, 
-  PlusCircle
+  PlusCircle,
+  Trash2
 } from "lucide-react";
 import { 
   Select, 
@@ -39,7 +40,15 @@ import {
   DialogFooter
 } from "./ui/dialog";
 
-type TaskType = "HOMEWORK" | "QUIZ" | "MIDTERM1" | "MIDTERM2" | "FINAL" | "PROJECT" | "REMINDER";
+type TaskType = string;
+
+const DEFAULT_CATEGORIES = [
+  { id: "HOMEWORK", icon: BookOpen, label: "Homework" },
+  { id: "QUIZ", icon: ListTodo, label: "Quiz" },
+  { id: "EXAM", icon: Trophy, label: "Exam" },
+  { id: "PROJECT", icon: GraduationCap, label: "Project" },
+  { id: "REMINDER", icon: Bell, label: "Reminder" },
+];
 
 export function TaskCreateForm({ onSuccess }: { onSuccess?: () => void }) {
   const [taskType, setTaskType] = useState<TaskType>("HOMEWORK");
@@ -71,23 +80,52 @@ export function TaskCreateForm({ onSuccess }: { onSuccess?: () => void }) {
     loadCourses();
   }, []);
 
-  const getCategoryDefaults = (type: string) => {
-    switch(type) {
-      case "FINAL":
-        return { title: "Spring 2026 Final Exam", desc: "List topics covered, room location, and required materials...", points: 100, pomodoros: 8 };
-      case "MIDTERM1":
-        return { title: "Midterm Assessment 1", desc: "Include specific chapters or modules being tested...", points: 60, pomodoros: 4 };
-      case "MIDTERM2":
-        return { title: "Midterm Assessment 2", desc: "Include specific chapters or modules being tested...", points: 60, pomodoros: 4 };
-      case "QUIZ":
-        return { title: "Quiz 1", desc: "Quick check on recent lecture material...", points: 20, pomodoros: 1 };
-      case "PROJECT":
-        return { title: "Research Project", desc: "Major project deliverables and milestones...", points: 100, pomodoros: 12 };
-      case "REMINDER":
-        return { title: "Study Session", desc: "Note specific focus areas...", points: 0, pomodoros: 1 };
-      default:
-        return { title: `${type} 1`, desc: "Enter details...", points: 100, pomodoros: 2 };
+  const currentCourse = useMemo(() => 
+    courses.find(c => c.id === selectedCourseId),
+    [courses, selectedCourseId]
+  );
+
+  const availableCategories = useMemo(() => {
+    if (!currentCourse || !currentCourse.rubric) {
+      return DEFAULT_CATEGORIES;
     }
+    
+    const rubric = currentCourse.rubric as Record<string, number>;
+    return Object.entries(rubric).map(([id, weight]) => {
+      // Map common IDs to icons
+      let icon = FileText;
+      if (id.includes("HOMEWORK")) icon = BookOpen;
+      else if (id.includes("QUIZ")) icon = ListTodo;
+      else if (id.includes("EXAM") || id.includes("FINAL") || id.includes("MIDTERM")) icon = Trophy;
+      else if (id.includes("PROJECT")) icon = GraduationCap;
+      else if (id.includes("REMINDER")) icon = Bell;
+
+      // Format label: "HOMEWORK" -> "Homework"
+      const label = id.charAt(0) + id.slice(1).toLowerCase().replace(/_/g, " ");
+      
+      return { id, icon, label };
+    });
+  }, [currentCourse]);
+
+  // Reset task type when categories change
+  useEffect(() => {
+    if (availableCategories.length > 0) {
+      if (!availableCategories.find(c => c.id === taskType)) {
+        setTaskType(availableCategories[0].id);
+      }
+    }
+  }, [availableCategories, taskType]);
+
+  const getCategoryDefaults = (type: string) => {
+    const lowerType = type.toLowerCase();
+    if (lowerType.includes("final")) return { title: "Final Exam", desc: "Final examination details...", points: 100, pomodoros: 8 };
+    if (lowerType.includes("midterm")) return { title: "Midterm Exam", desc: "Midterm assessment details...", points: 60, pomodoros: 4 };
+    if (lowerType.includes("quiz")) return { title: "Quiz 1", desc: "Quick check details...", points: 20, pomodoros: 1 };
+    if (lowerType.includes("project")) return { title: "Major Project", desc: "Project deliverables...", points: 100, pomodoros: 12 };
+    if (lowerType.includes("homework")) return { title: "Homework 1", desc: "Assignment details...", points: 20, pomodoros: 2 };
+    if (lowerType.includes("reminder")) return { title: "Study Session", desc: "Review details...", points: 0, pomodoros: 1 };
+    
+    return { title: `${type} 1`, desc: "Enter details...", points: 100, pomodoros: 2 };
   };
 
   // Auto-fill when task type changes
@@ -138,7 +176,11 @@ export function TaskCreateForm({ onSuccess }: { onSuccess?: () => void }) {
     // Convert array back to map for the database
     const rubricMap: Record<string, number> = {};
     rubricItems.forEach(item => {
-      rubricMap[item.id] = item.weight;
+      // Use label as ID if it's a custom item, otherwise keep original ID
+      const id = item.id.startsWith("SECTION_") 
+        ? item.label.toUpperCase().replace(/\s+/g, "_") 
+        : item.id;
+      rubricMap[id] = item.weight;
     });
 
     const res = await createCourse(newCourseName, rubricMap);
@@ -170,10 +212,7 @@ export function TaskCreateForm({ onSuccess }: { onSuccess?: () => void }) {
   const updateRubricItem = (index: number, field: "label" | "weight", value: string | number) => {
     const newItems = [...rubricItems];
     if (field === "label") {
-      const label = value as string;
-      newItems[index].label = label;
-      // Also update ID to match label for consistency
-      newItems[index].id = label.toUpperCase().replace(/\s+/g, '_');
+      newItems[index].label = value as string;
     } else {
       newItems[index].weight = Number(value);
     }
@@ -203,37 +242,6 @@ export function TaskCreateForm({ onSuccess }: { onSuccess?: () => void }) {
 
   return (
     <form action={formAction} className="flex flex-col gap-4 overflow-y-auto max-h-[85vh] px-1">
-      {/* Category Selection */}
-      <div className="flex flex-col gap-2">
-        <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Academic Category</Label>
-        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
-          {[
-            { id: "FINAL", icon: Trophy, label: "Final" },
-            { id: "MIDTERM1", icon: FileCheck, label: "M1" },
-            { id: "MIDTERM2", icon: FileCheck, label: "M2" },
-            { id: "PROJECT", icon: GraduationCap, label: "Proj" },
-            { id: "HOMEWORK", icon: BookOpen, label: "HW" },
-            { id: "QUIZ", icon: ListTodo, label: "Quiz" },
-            { id: "REMINDER", icon: Bell, label: "Rem" },
-          ].map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => setTaskType(cat.id as TaskType)}
-              className={cn(
-                "flex flex-col items-center justify-center gap-1 p-1.5 rounded-lg border-2 transition-all group",
-                taskType === cat.id 
-                  ? "border-primary bg-primary/5 text-primary shadow-sm" 
-                  : "border-muted bg-background hover:border-primary/20 text-muted-foreground"
-              )}
-            >
-              <cat.icon className={cn("h-3.5 w-3.5 transition-transform group-hover:scale-110", taskType === cat.id && "animate-pulse")} />
-              <span className="text-[8px] font-black uppercase tracking-tight">{cat.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Course Selection */}
       <div className="grid gap-1.5">
         <div className="flex items-center justify-between">
@@ -265,7 +273,16 @@ export function TaskCreateForm({ onSuccess }: { onSuccess?: () => void }) {
                 
                 <div className="border-t pt-4 mt-2">
                   <div className="flex items-center justify-between mb-3">
-                    <Label className="text-xs font-bold uppercase text-primary">Grading Rubric (%)</Label>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs font-bold uppercase text-primary">Grading Rubric (%)</Label>
+                      <button 
+                        type="button" 
+                        onClick={addRubricSection}
+                        className="text-primary hover:text-primary/80"
+                      >
+                        <PlusCircle className="h-4 w-4" />
+                      </button>
+                    </div>
                     <Badge variant={totalWeight === 100 ? "default" : "destructive"} className="text-[10px]">
                       Total: {totalWeight}%
                     </Badge>
@@ -273,20 +290,33 @@ export function TaskCreateForm({ onSuccess }: { onSuccess?: () => void }) {
                   
                   <div className="grid gap-3">
                     {rubricItems.map((item, index) => (
-                      <div key={item.id} className="flex items-center gap-4">
-                        <Label htmlFor={`rubric-${item.id}`} className="text-[11px] font-medium flex-1">{item.label}</Label>
-                        <div className="flex items-center gap-2 w-24">
+                      <div key={item.id} className="flex items-center gap-3">
+                        <Input
+                          className="h-8 text-[11px] font-medium flex-1"
+                          value={item.label}
+                          onChange={(e) => updateRubricItem(index, "label", e.target.value)}
+                          placeholder="Section Name"
+                        />
+                        <div className="flex items-center gap-2 w-20">
                           <Input
-                            id={`rubric-${item.id}`}
                             type="number"
                             min={0}
                             max={100}
-                            className="h-8 text-right pr-2"
+                            className="h-8 text-right pr-2 text-[11px]"
                             value={item.weight}
                             onChange={(e) => updateRubricItem(index, "weight", Number(e.target.value))}
                           />
-                          <span className="text-xs text-muted-foreground">%</span>
+                          <span className="text-[10px] text-muted-foreground">%</span>
                         </div>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => deleteRubricItem(index)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -317,6 +347,31 @@ export function TaskCreateForm({ onSuccess }: { onSuccess?: () => void }) {
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      {/* Category Selection */}
+      <div className="flex flex-col gap-2">
+        <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Academic Category</Label>
+        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-5 md:grid-cols-7">
+          {availableCategories.map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => setTaskType(cat.id)}
+              className={cn(
+                "flex flex-col items-center justify-center gap-1 p-1.5 rounded-lg border-2 transition-all group",
+                taskType === cat.id 
+                  ? "border-primary bg-primary/5 text-primary shadow-sm" 
+                  : "border-muted bg-background hover:border-primary/20 text-muted-foreground"
+              )}
+            >
+              <cat.icon className={cn("h-3.5 w-3.5 transition-transform group-hover:scale-110", taskType === cat.id && "animate-pulse")} />
+              <span className="text-[8px] font-black uppercase tracking-tight text-center leading-tight line-clamp-1 w-full">
+                {cat.label}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid gap-1.5">

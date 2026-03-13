@@ -11,16 +11,18 @@ interface PomodoroTimerProps {
   taskTitle: string;
   subTaskTitle?: string;
   onSessionComplete: (isDone: boolean) => void;
+  onTimeUpdate?: (seconds: number) => void;
   autoStart?: boolean;
 }
 
 type TimerMode = "WORK" | "BREAK" | "PROMPT";
 
-export function PomodoroTimer({ taskId, taskTitle, subTaskTitle, onSessionComplete, autoStart = false }: PomodoroTimerProps) {
+export function PomodoroTimer({ taskId, taskTitle, subTaskTitle, onSessionComplete, onTimeUpdate, autoStart = false }: PomodoroTimerProps) {
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isActive, setIsActive] = useState(autoStart);
   const [mode, setMode] = useState<TimerMode>("WORK");
   const [sessionCount, setSessionCount] = useState(0);
+  const workSecondsRef = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
@@ -33,11 +35,19 @@ export function PomodoroTimer({ taskId, taskTitle, subTaskTitle, onSessionComple
     }
   }, []);
 
+  const reportTimeSpent = useCallback(() => {
+    if (workSecondsRef.current > 0 && onTimeUpdate) {
+      onTimeUpdate(workSecondsRef.current);
+      workSecondsRef.current = 0;
+    }
+  }, [onTimeUpdate]);
+
   const handleFinishWork = useCallback(() => {
     playSound();
     setIsActive(false);
+    reportTimeSpent(); // Report any pending seconds
     setMode("PROMPT");
-  }, [playSound]);
+  }, [playSound, reportTimeSpent]);
 
   const handlePromptResponse = (isDone: boolean) => {
     if (isDone) {
@@ -74,6 +84,14 @@ export function PomodoroTimer({ taskId, taskTitle, subTaskTitle, onSessionComple
     if (isActive && timeLeft > 0) {
       interval = setInterval(() => {
         setTimeLeft((prev) => prev - 1);
+        if (mode === "WORK") {
+          // Only track actual focus time, excluding breaks
+          workSecondsRef.current += 1;
+          // Auto-report every 30 seconds to keep DB synced without too many requests
+          if (workSecondsRef.current >= 30) {
+            reportTimeSpent();
+          }
+        }
       }, 1000);
     } else if (timeLeft === 0 && isActive) {
       if (mode === "WORK") {
@@ -90,7 +108,7 @@ export function PomodoroTimer({ taskId, taskTitle, subTaskTitle, onSessionComple
     return () => {
       if (interval) clearInterval(interval);
     };
-  }, [isActive, timeLeft, mode, handleFinishWork, playSound]);
+  }, [isActive, timeLeft, mode, handleFinishWork, playSound, reportTimeSpent]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
