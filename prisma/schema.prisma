@@ -21,7 +21,6 @@ datasource db {
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
-... (rest of the schema)
 
 model Course {
   id        String   @id @default(uuid())
