@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CourseManager } from "./course-manager";
 import { TaskCreateForm } from "./task-create-form";
 import { Plus, GraduationCap } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { getCourses } from "../actions";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,18 @@ import {
 export function DashboardButtons() {
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [coursesDialogOpen, setCoursesDialogOpen] = useState(false);
+  const [prefetchedCourses, setPrefetchedCourses] = useState<any[] | undefined>(undefined);
+
+  // Eagerly pre-fetch courses on mount so the dialog feels "static"
+  useEffect(() => {
+    async function prefetch() {
+      const res = await getCourses();
+      if (res.success) {
+        setPrefetchedCourses(res.data);
+      }
+    }
+    prefetch();
+  }, []);
 
   return (
     <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
@@ -36,7 +49,7 @@ export function DashboardButtons() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-2 sm:py-4 overflow-y-auto max-h-[70vh]">
-            <CourseManager />
+            <CourseManager initialCourses={prefetchedCourses} />
           </div>
         </DialogContent>
       </Dialog>

@@ -47,9 +47,13 @@ type RubricItem = {
 // Persistent client-side cache
 let cachedCourses: any[] | null = null;
 
-export function CourseManager() {
-  const [courses, setCourses] = useState<any[]>(cachedCourses || []);
-  const [isLoading, setIsLoading] = useState(!cachedCourses);
+interface CourseManagerProps {
+  initialCourses?: any[];
+}
+
+export function CourseManager({ initialCourses }: CourseManagerProps) {
+  const [courses, setCourses] = useState<any[]>(initialCourses || cachedCourses || []);
+  const [isLoading, setIsLoading] = useState(!initialCourses && !cachedCourses);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
@@ -58,8 +62,8 @@ export function CourseManager() {
   const [rubricItems, setRubricItems] = useState<RubricItem[]>([]);
 
   const loadCourses = async (force = false) => {
-    if (!force && cachedCourses) {
-      setCourses(cachedCourses);
+    if (!force && (initialCourses || cachedCourses)) {
+      if (initialCourses && !cachedCourses) cachedCourses = initialCourses;
       setIsLoading(false);
       return;
     }
@@ -77,7 +81,7 @@ export function CourseManager() {
 
   useEffect(() => {
     loadCourses();
-  }, []);
+  }, [initialCourses]);
 
   const totalWeight = useMemo(() => 
     rubricItems.reduce((acc, item) => acc + item.weight, 0),
@@ -158,7 +162,7 @@ export function CourseManager() {
       if (res.success) {
         toast.success("Course updated");
         setEditingId(null);
-        loadCourses();
+        loadCourses(true);
       } else {
         toast.error(res.error);
       }
@@ -167,7 +171,7 @@ export function CourseManager() {
       if (res.success) {
         toast.success("Course created");
         setIsAdding(false);
-        loadCourses();
+        loadCourses(true);
       } else {
         toast.error(res.error);
       }
@@ -178,7 +182,7 @@ export function CourseManager() {
     const res = await deleteCourse(id);
     if (res.success) {
       toast.success("Course deleted");
-      loadCourses();
+      loadCourses(true);
     } else {
       toast.error(res.error);
     }
