@@ -5,7 +5,7 @@ import { SupabaseLogo } from "./supabase-logo";
 export function Hero() {
   return (
     <div className="flex flex-col gap-12 items-center py-12 px-4">
-      <div className="relative group">
+      <div className="relative group select-none">
         <div className="absolute -inset-6 bg-primary/20 blur-3xl rounded-full group-hover:bg-primary/30 transition-colors" />
         <div className="relative bg-primary p-5 rounded-2xl shadow-2xl shadow-primary/20 transform group-hover:scale-105 transition-transform duration-300">
           <CheckSquare className="h-12 w-12 text-primary-foreground" />
@@ -21,7 +21,7 @@ export function Hero() {
         </p>
       </div>
 
-      <div className="flex flex-col items-center gap-6 mt-4">
+      <div className="flex flex-col items-center gap-6 mt-4 select-none">
         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/60">
           Powering your productivity with
         </p>

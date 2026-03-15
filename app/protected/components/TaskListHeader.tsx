@@ -68,7 +68,7 @@ export function TaskListHeader({ tasksPromise, onShuffle, onDeleteAll, isShuffli
           <div className="flex items-center gap-2 px-3 py-1 bg-primary/5 border border-primary/10 rounded-full">
             <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
             <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Completion:</span>
-            <Suspense fallback={<Skeleton className="h-3 w-8 bg-primary/10" />}>
+            <Suspense fallback={<span className="opacity-50 text-[11px] font-black">...</span>}>
               <CompletionRateValue tasksPromise={tasksPromise} />
             </Suspense>
           </div>
