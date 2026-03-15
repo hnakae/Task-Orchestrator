@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, useEffect, use, Suspense } from "react";
+import { useActionState, useState, useEffect } from "react";
 import { 
   updateTask, 
   deleteTask, 
@@ -965,13 +965,11 @@ function SortableTaskItem({ task, setTasks }: { task: TaskWithAttachments; setTa
 function TaskListContent({ 
   tasks, 
   setTasks,
-  isSorting,
   handleDragEnd,
   sensors
 }: { 
   tasks: TaskWithAttachments[];
   setTasks: React.Dispatch<React.SetStateAction<TaskWithAttachments[] | null>>;
-  isSorting: boolean;
   handleDragEnd: (event: DragEndEvent) => void;
   sensors: any;
 }) {
@@ -996,10 +994,7 @@ function TaskListContent({
   }
 
   return (
-    <div className={cn(
-      "transition-all duration-500",
-      isSorting && "opacity-40 blur-[1px] pointer-events-none scale-[0.98]"
-    )}>
+    <div className="transition-all duration-500">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
@@ -1046,18 +1041,11 @@ function TaskListSkeleton() {
   );
 }
 
-export function TaskList({ initialTasksPromise }: { initialTasksPromise: Promise<ActionResult<TaskWithAttachments[]>> }) {
-  const [tasks, setTasks] = useState<TaskWithAttachments[] | null>(null);
-  const [isSorting, setIsSorting] = useState(false);
+export function TaskList({ initialResult }: { initialResult: ActionResult<TaskWithAttachments[]> }) {
+  const [tasks, setTasks] = useState<TaskWithAttachments[] | null>(initialResult.success ? initialResult.data : null);
+  const error = initialResult.success ? null : initialResult.error;
   const [isShuffling, setIsShuffling] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
-
-  // Load initial tasks without blocking UI re-renders later
-  useEffect(() => {
-    initialTasksPromise.then(result => {
-      if (result.success) setTasks(result.data);
-    });
-  }, [initialTasksPromise]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -1115,15 +1103,34 @@ export function TaskList({ initialTasksPromise }: { initialTasksPromise: Promise
     }
   }
 
+  if (error) {
+    return (
+      <Card className="border-destructive/20 bg-destructive/5">
+        <CardHeader>
+          <CardTitle className="text-destructive flex items-center gap-2">
+            <Info className="h-5 w-5" />
+            Failed to Load Tasks
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">{error}</p>
+          <Button onClick={() => window.location.reload()} variant="outline" size="sm">
+            Try Again
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <AIOptimizationEngine 
-        tasksPromise={initialTasksPromise} 
+        initialTasks={tasks || []} 
         onOptimized={(optimizedTasks) => setTasks(optimizedTasks)} 
       />
 
       <TaskListHeader 
-        tasksPromise={initialTasksPromise}
+        initialTasks={tasks || []}
         onShuffle={handleShuffle}
         onDeleteAll={handleDeleteAll}
         isShuffling={isShuffling}
@@ -1134,7 +1141,6 @@ export function TaskList({ initialTasksPromise }: { initialTasksPromise: Promise
         <TaskListContent 
           tasks={tasks}
           setTasks={setTasks}
-          isSorting={isSorting}
           handleDragEnd={handleDragEnd}
           sensors={sensors}
         />

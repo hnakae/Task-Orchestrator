@@ -1,45 +1,36 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { getAIOptimizedFocus, updateTaskOrder, type TaskWithAttachments, type ActionResult } from "../actions";
+import { getAIOptimizedFocus, updateTaskOrder, type TaskWithAttachments } from "../actions";
 
 interface AIOptimizationEngineProps {
-  tasksPromise: Promise<ActionResult<TaskWithAttachments[]>>;
+  initialTasks: TaskWithAttachments[];
   onOptimized: (optimizedTasks: TaskWithAttachments[], recommendation: string) => void;
 }
 
-export function AIOptimizationEngine({ tasksPromise, onOptimized }: AIOptimizationEngineProps) {
+export function AIOptimizationEngine({ initialTasks, onOptimized }: AIOptimizationEngineProps) {
   const [isSorting, setIsSorting] = useState(false);
   const [aiRecommendation, setAIRecommendation] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
 
   async function handleSortByFocusScore() {
     setIsSorting(true);
     setAIRecommendation(null);
 
     try {
-      const result = await tasksPromise;
-      if (!result.success) {
-        toast.error(result.error);
-        setIsSorting(false);
-        return;
-      }
-
-      const tasks = result.data;
-      const optimizationResult = await getAIOptimizedFocus(tasks);
+      const optimizationResult = await getAIOptimizedFocus(initialTasks);
 
       if (optimizationResult.success) {
         setAIRecommendation(optimizationResult.data.recommendation);
         
         const optimizedTasks = optimizationResult.data.optimizedIds
-          .map(id => tasks.find(t => t.id === id))
+          .map(id => initialTasks.find(t => t.id === id))
           .filter((t): t is TaskWithAttachments => !!t);
 
-        if (optimizedTasks.length === tasks.length) {
+        if (optimizedTasks.length === initialTasks.length) {
           onOptimized(optimizedTasks, optimizationResult.data.recommendation);
           
           const taskPositions = optimizedTasks.map((task, index) => ({
@@ -52,7 +43,7 @@ export function AIOptimizationEngine({ tasksPromise, onOptimized }: AIOptimizati
       } else {
         toast.error(optimizationResult.error);
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to optimize tasks");
     } finally {
       setIsSorting(false);
@@ -106,7 +97,7 @@ export function AIOptimizationEngine({ tasksPromise, onOptimized }: AIOptimizati
           <Sparkles className="h-5 w-5 text-primary shrink-0 mt-0.5" />
           <div className="flex flex-col gap-1">
             <span className="text-xs font-bold text-primary uppercase tracking-wider">AI Recommendation</span>
-            <p className="text-sm text-foreground/90 font-medium italic">"{aiRecommendation}"</p>
+            <p className="text-sm text-foreground/90 font-medium italic">&quot;{aiRecommendation}&quot;</p>
           </div>
           <Button 
             variant="ghost" 
