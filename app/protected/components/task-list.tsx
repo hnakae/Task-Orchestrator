@@ -76,7 +76,12 @@ import {
   GraduationCap,
   Bell,
   ArrowRight,
-  Target
+  Target,
+  Eye,
+  CalendarDays,
+  Clock3,
+  Info,
+  ExternalLink as LinkIcon
 } from "lucide-react";
 import { 
   Select, 
@@ -86,12 +91,21 @@ import {
   SelectValue 
 } from "./ui/select";
 import { PomodoroTimer } from "./pomodoro-timer";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "./ui/dialog";
 
 function formatDate(date: Date | null) {
   if (!date) return "—";
   const d = new Date(date);
   return d.toLocaleString(undefined, {
-    dateStyle: "short",
+    dateStyle: "medium",
     timeStyle: d.getHours() || d.getMinutes() ? "short" : undefined,
   });
 }
@@ -127,6 +141,7 @@ function TaskItem({
   isDragging?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  const [isViewing, setIsViewing] = useState(false);
   const [isDecomposing, setIsDecomposing] = useState(false);
   const [showTimer, setShowTimer] = useState(false);
   const [isStepsExpanded, setIsStepsExpanded] = useState(true);
@@ -223,7 +238,7 @@ function TaskItem({
             
             <div className="flex flex-col gap-2">
               <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Priority Category</Label>
-              <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
+              <div className="grid grid-cols-4 gap-1.5 xs:grid-cols-7">
                 {[
                   { id: "FINAL", icon: Trophy, label: "Final" },
                   { id: "MIDTERM1", icon: FileCheck, label: "M1" },
@@ -282,7 +297,7 @@ function TaskItem({
                 rows={2}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor={`edit-importance-${task.id}`} className="text-sm font-semibold">Points</Label>
                 <Input id={`edit-importance-${task.id}`} name="importance" type="number" min={1} max={1000} defaultValue={task.importance} className="bg-background border-input" />
@@ -299,11 +314,11 @@ function TaskItem({
               </div>
             </div>
             {updateState && <p className="text-sm text-destructive font-medium">{updateState}</p>}
-            <CardFooter className="p-0 pt-2 flex justify-end gap-3">
-              <Button type="button" variant="outline" size="sm" onClick={() => setEditing(false)} className="font-semibold">
+            <CardFooter className="p-0 pt-2 flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+              <Button type="button" variant="outline" size="sm" onClick={() => setEditing(false)} className="w-full sm:w-auto font-semibold order-2 sm:order-1">
                 Cancel
               </Button>
-              <Button type="submit" disabled={isUpdating} size="sm" className="font-semibold">
+              <Button type="submit" disabled={isUpdating} size="sm" className="w-full sm:w-auto font-semibold order-1 sm:order-2">
                 {isUpdating ? "Saving…" : "Save Changes"}
               </Button>
             </CardFooter>
@@ -314,98 +329,122 @@ function TaskItem({
   }
 
   return (
+    <>
     <Card className={cn(
       isDragging ? "opacity-50 ring-2 ring-primary ring-offset-2 ring-offset-background" : "hover:shadow-md hover:border-primary/40",
       task.isCompleted && "opacity-75 bg-muted/30 border-muted-foreground/20",
       "transition-all duration-300 group overflow-hidden border-border bg-card shadow-sm"
     )}>
-      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3 relative z-10">
-        <div className="flex items-start gap-3 flex-1">
-          <div className="flex flex-col gap-2 mt-1">
+      <CardHeader className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4 pb-3 relative z-10">
+        <div className="flex items-start gap-2 sm:gap-3 flex-1 w-full min-w-0">
+          <div className="flex flex-col gap-2 mt-1 shrink-0">
             {dragHandleProps && (
               <button
                 {...dragHandleProps}
                 className="p-1.5 hover:bg-primary/10 rounded-md cursor-grab active:cursor-grabbing shrink-0 transition-colors bg-muted/50"
                 aria-label="Drag to reorder"
               >
-                <GripVertical className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+                <GripVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground group-hover:text-primary transition-colors" />
               </button>
             )}
             <button 
               onClick={onToggleComplete}
-              className="p-1.5 hover:bg-primary/10 rounded-md transition-colors"
+              className="p-1.5 hover:bg-primary/10 rounded-md transition-colors shrink-0"
               title={task.isCompleted ? "Mark as incomplete" : "Mark as complete"}
             >
               {task.isCompleted ? (
-                <CheckCircle2 className="h-5 w-5 text-green-500 fill-green-500/10" />
+                <CheckCircle2 className="h-4.5 w-4.5 sm:h-5 sm:w-5 text-green-500 fill-green-500/10" />
               ) : (
-                <Circle className="h-5 w-5 text-muted-foreground group-hover:text-primary" />
+                <Circle className="h-4.5 w-4.5 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary" />
               )}
             </button>
           </div>
 
-          <div className="flex flex-col gap-2 flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <TypeIcon className={cn("h-3.5 w-3.5", typeInfo.color)} />
-              <CardTitle className={cn(
-                "text-base font-bold leading-tight truncate transition-colors",
-                task.isCompleted && "line-through text-muted-foreground",
-                !task.isCompleted && "group-hover:text-primary"
-              )}>
-                {task.title}
-              </CardTitle>
-              <Badge variant="outline" className={cn("text-[9px] h-4 uppercase font-black px-1.5", typeInfo.bg, typeInfo.color, typeInfo.border)}>
-                {typeInfo.label}
-              </Badge>
-              {task.course && (
-                <Badge variant="secondary" className="text-[9px] h-4 bg-primary/10 text-primary border-none font-bold">
-                  {task.course.name}
+          <div className="flex flex-col gap-1.5 sm:gap-2 flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <TypeIcon className={cn("h-3 w-3 sm:h-3.5 sm:w-3.5", typeInfo.color)} />
+              <button 
+                onClick={() => setIsViewing(true)}
+                className="text-left hover:text-primary transition-colors focus:outline-none"
+              >
+                <CardTitle className={cn(
+                  "text-sm sm:text-base font-bold leading-tight truncate max-w-[150px] xs:max-w-none",
+                  task.isCompleted && "line-through text-muted-foreground"
+                )}>
+                  {task.title}
+                </CardTitle>
+              </button>
+              <div className="flex items-center gap-1">
+                <Badge variant="outline" className={cn("text-[8px] sm:text-[9px] h-3.5 sm:h-4 uppercase font-black px-1 sm:px-1.5", typeInfo.bg, typeInfo.color, typeInfo.border)}>
+                  {typeInfo.label}
                 </Badge>
-              )}
+                {task.course && (
+                  <Badge variant="secondary" className="text-[8px] sm:text-[9px] h-3.5 sm:h-4 bg-primary/10 text-primary border-none font-bold px-1 sm:px-1.5">
+                    {task.course.name}
+                  </Badge>
+                )}
+              </div>
             </div>
             {task.description && (
-              <p className="text-xs text-muted-foreground line-clamp-1 italic">
-                {task.description}
-              </p>
+              <button 
+                onClick={() => setIsViewing(true)}
+                className="text-left hover:text-primary/80 transition-colors focus:outline-none group/desc"
+              >
+                <p className="text-[10px] sm:text-xs text-muted-foreground line-clamp-1 italic group-hover/desc:text-foreground/70 transition-colors">
+                  {task.description}
+                </p>
+              </button>
             )}
             
             {task.attachments && task.attachments.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-1">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2 mt-0.5 sm:mt-1">
                 {task.attachments.map((att) => (
                   <a 
                     key={att.id}
                     href={att.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-muted/50 border border-border hover:bg-muted hover:border-primary/30 text-[10px] font-medium transition-all group/att"
+                    className="inline-flex items-center gap-1 sm:gap-1.5 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md bg-muted/50 border border-border hover:bg-muted hover:border-primary/30 text-[9px] sm:text-[10px] font-medium transition-all group/att"
                     title={att.name}
                   >
-                    <FileText className="h-3 w-3 text-muted-foreground group-hover/att:text-primary" />
-                    <span className="max-w-[100px] truncate">{att.name}</span>
-                    <ExternalLink className="h-2.5 w-2.5 opacity-0 group-hover/att:opacity-100 transition-opacity" />
+                    <FileText className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-muted-foreground group-hover/att:text-primary" />
+                    <span className="max-w-[70px] sm:max-w-[100px] truncate">{att.name}</span>
+                    <ExternalLink className="h-2 w-2 sm:h-2.5 sm:w-2.5 opacity-0 group-hover/att:opacity-100 transition-opacity" />
                   </a>
                 ))}
               </div>
             )}
-            <div className="flex items-center gap-3">
-              <Badge variant="outline" className="text-[11px] font-bold px-2 py-0.5 border-primary/30 text-primary bg-primary/5 flex items-center gap-1">
-                <Trophy className="h-3 w-3" />
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <Badge variant="outline" className="text-[10px] sm:text-[11px] font-bold px-1.5 sm:px-2 py-0 h-4.5 sm:h-5 border-primary/30 text-primary bg-primary/5 flex items-center gap-1">
+                <Trophy className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                 {task.importance} pts
               </Badge>
-              <Badge variant="secondary" className="text-[10px] h-5 gap-1.5 bg-orange-50 text-orange-700 border-orange-100 font-bold">
-                <Timer className="h-3 w-3" />
-                {formatSeconds(actualTotalSeconds)} / {task.estimatedPomodoros * 25}m
+              <Badge variant="secondary" className="text-[9px] sm:text-[10px] h-4.5 sm:h-5 gap-1 sm:gap-1.5 bg-orange-50 text-orange-700 border-orange-100 font-bold px-1.5 sm:px-2">
+                <Timer className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                <span className="hidden xs:inline">{formatSeconds(actualTotalSeconds)} / {task.estimatedPomodoros * 25}m</span>
+                <span className="xs:hidden">{formatSeconds(actualTotalSeconds)}</span>
               </Badge>
               {task.deadline && (
-                <span className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5 ml-1">
-                  <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
+                <span className="text-[10px] sm:text-[11px] font-medium text-muted-foreground flex items-center gap-1 sm:gap-1.5">
+                  <span className="w-1 h-1 rounded-full bg-muted-foreground/40 hidden xs:block" />
                   {formatDate(task.deadline)}
                 </span>
               )}
             </div>
           </div>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-2 w-full sm:w-auto mt-1 sm:mt-0 justify-end">
+          <Button 
+            type="button" 
+            variant="secondary" 
+            size="sm" 
+            onClick={() => setIsViewing(true)} 
+            className="h-7 sm:h-8 px-2 sm:px-3 text-[10px] sm:text-xs font-bold transition-all hover:bg-primary hover:text-primary-foreground border-transparent"
+            title="View full details"
+          >
+            <Eye className="h-3 w-3 sm:h-3.5 sm:w-3.5 sm:mr-1.5" />
+            <span className="hidden sm:inline">View</span>
+          </Button>
           {!task.isCompleted && (
             <Button 
               type="button" 
@@ -413,13 +452,13 @@ function TaskItem({
               size="sm" 
               onClick={() => setShowTimer(!showTimer)} 
               className={cn(
-                "h-8 text-xs font-bold transition-all border-transparent",
+                "h-7 sm:h-8 flex-1 sm:flex-none text-[10px] sm:text-xs font-bold transition-all border-transparent",
                 showTimer ? "bg-orange-500 hover:bg-orange-600 text-white" : "hover:bg-orange-500/10 hover:text-orange-600"
               )}
               title="Pomodoro Timer"
             >
-              <Timer className={cn("h-3.5 w-3.5 mr-1", showTimer && "animate-pulse")} />
-              {showTimer ? "Timer Open" : "Focus"}
+              <Timer className={cn("h-3 w-3 sm:h-3.5 sm:w-3.5 mr-1", showTimer && "animate-pulse")} />
+              {showTimer ? "Timer" : "Focus"}
             </Button>
           )}
           <Button 
@@ -428,38 +467,44 @@ function TaskItem({
             size="sm" 
             onClick={handleDecompose} 
             disabled={isDecomposing}
-            className="h-8 text-xs font-bold transition-all hover:bg-primary hover:text-primary-foreground border-transparent"
+            className="h-7 sm:h-8 flex-1 sm:flex-none text-[10px] sm:text-xs font-bold transition-all hover:bg-primary hover:text-primary-foreground border-transparent"
             title="Break down into smaller tasks"
           >
-            <Split className={cn("h-3.5 w-3.5 mr-1", isDecomposing && "animate-spin")} />
-            {isDecomposing ? "..." : "Break Down"}
+            <Split className={cn("h-3 w-3 sm:h-3.5 sm:w-3.5 sm:mr-1", isDecomposing && "animate-spin")} />
+            <span className="hidden sm:inline">{isDecomposing ? "..." : "Break Down"}</span>
+            <span className="sm:hidden">{isDecomposing ? "..." : "Split"}</span>
           </Button>
           <Button 
             type="button" 
             variant="secondary" 
             size="sm" 
             onClick={() => setEditing(true)} 
-            className="h-8 text-xs font-bold transition-all hover:bg-primary hover:text-primary-foreground border-transparent"
+            className="h-7 sm:h-8 px-2 sm:px-3 text-[10px] sm:text-xs font-bold transition-all hover:bg-primary hover:text-primary-foreground border-transparent"
           >
             Edit
           </Button>
-          <form action={deleteAction}>
+          <form action={deleteAction} className="flex-none">
             <input type="hidden" name="id" value={task.id} />
             <Button 
               type="submit" 
               variant="destructive" 
               size="sm" 
               disabled={isDeleting} 
-              className="h-8 text-xs font-bold transition-all border-transparent shadow-sm"
+              className="h-7 sm:h-8 px-2.5 text-[10px] sm:text-xs font-bold transition-all border-transparent shadow-sm"
+              title="Delete task"
             >
-              {isDeleting ? "…" : "Delete"}
+              {isDeleting ? (
+                "…"
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
             </Button>
           </form>
         </div>
       </CardHeader>
-      <CardContent className="pb-4 relative z-10 border-t bg-muted/5 mt-1 pt-4">
+      <CardContent className="pb-3 sm:pb-4 relative z-10 border-t bg-muted/5 mt-1 pt-3 sm:pt-4">
         {showTimer && (
-          <div className="mb-4 animate-in zoom-in-95 duration-200">
+          <div className="mb-3 sm:mb-4 animate-in zoom-in-95 duration-200">
             {(() => {
               const firstIncompleteChild = task.children?.find(c => !c.isCompleted);
               return (
@@ -490,75 +535,75 @@ function TaskItem({
           </div>
         )}
 
-        {deleteState && <p className="text-sm text-destructive mb-3 font-medium bg-destructive/10 p-2 rounded border border-destructive/20">{deleteState}</p>}
+        {deleteState && <p className="text-[11px] sm:text-sm text-destructive mb-3 font-medium bg-destructive/10 p-2 rounded border border-destructive/20">{deleteState}</p>}
 
         {/* Nested Sub-tasks */}
         {task.children && task.children.length > 0 && (
-          <div className="mt-0 pt-0 flex flex-col gap-2">
+          <div className="mt-0 pt-0 flex flex-col gap-1.5 sm:gap-2">
             <button 
               onClick={() => setIsStepsExpanded(!isStepsExpanded)}
               className="flex items-center justify-between w-full hover:bg-primary/5 p-1 rounded transition-colors group/steps"
             >
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-3 w-3 text-primary animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Actionable Steps</span>
-                <Badge variant="secondary" className="text-[8px] h-3.5 px-1 bg-primary/10 text-primary border-none">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-primary animate-pulse" />
+                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-muted-foreground text-left">Actionable Steps</span>
+                <Badge variant="secondary" className="text-[7px] sm:text-[8px] h-3 sm:h-3.5 px-1 bg-primary/10 text-primary border-none">
                   {task.children.filter(c => c.isCompleted).length}/{task.children.length}
                 </Badge>
               </div>
               {isStepsExpanded ? (
-                <ChevronDown className="h-3 w-3 text-muted-foreground group-hover/steps:text-primary transition-colors" />
+                <ChevronDown className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-muted-foreground group-hover/steps:text-primary transition-colors" />
               ) : (
-                <ChevronRight className="h-3 w-3 text-muted-foreground group-hover/steps:text-primary transition-colors" />
+                <ChevronRight className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-muted-foreground group-hover/steps:text-primary transition-colors" />
               )}
             </button>
             
             {isStepsExpanded && (
-              <div className="flex flex-col gap-2 ml-4 border-l-2 border-primary/10 pl-4 animate-in slide-in-from-top-1 duration-200">
+              <div className="flex flex-col gap-1.5 sm:gap-2 ml-2 sm:ml-4 border-l-2 border-primary/10 pl-2 sm:pl-4 animate-in slide-in-from-top-1 duration-200">
                 {task.children.map((child) => {
                   const childSeconds = child.actualSeconds || 0;
                   return (
                     <div key={child.id} className={cn(
-                      "flex flex-col gap-1 p-2 rounded-lg transition-all group/sub",
+                      "flex flex-col gap-1 p-1.5 sm:p-2 rounded-lg transition-all group/sub",
                       child.isCompleted ? "bg-muted/50 opacity-75" : "bg-primary/5 border border-primary/10"
                     )}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                           <button 
                             onClick={async () => {
                               const res = await toggleTaskCompletion(child.id, !child.isCompleted);
                               if (!res.success) toast.error(res.error);
                             }}
-                            className="transition-transform active:scale-90"
+                            className="transition-transform active:scale-90 shrink-0"
                           >
                             {child.isCompleted ? (
-                              <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                              <CheckCircle2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-green-500" />
                             ) : (
-                              <Circle className="h-3.5 w-3.5 text-muted-foreground hover:text-primary" />
+                              <Circle className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground hover:text-primary" />
                             )}
                           </button>
                           <span className={cn(
-                            "text-xs font-bold",
+                            "text-[11px] sm:text-xs font-bold truncate",
                             child.isCompleted ? "line-through text-muted-foreground" : "text-foreground/90"
                           )}>{child.title}</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[9px] font-bold text-muted-foreground">{formatSeconds(childSeconds)} spent</span>
-                          <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-background font-bold uppercase border-primary/20">Step</Badge>
+                        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                          <span className="text-[8px] sm:text-[9px] font-bold text-muted-foreground">{formatSeconds(childSeconds)}</span>
+                          <Badge variant="outline" className="text-[7px] sm:text-[8px] h-3 sm:h-3.5 px-0.5 sm:px-1 bg-background font-bold uppercase border-primary/20">Step</Badge>
                         </div>
                       </div>
                       {child.attachments && child.attachments.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1 ml-5">
+                        <div className="flex flex-wrap gap-1 mt-0.5 ml-4 sm:ml-5">
                           {child.attachments.map((att) => (
                             <a 
                               key={att.id}
                               href={att.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex items-center gap-1 text-[9px] text-muted-foreground hover:text-primary transition-colors"
+                              className="flex items-center gap-1 text-[8px] sm:text-[9px] text-muted-foreground hover:text-primary transition-colors"
                             >
-                              <Paperclip className="h-2.5 w-2.5" />
-                              <span className="truncate max-w-[80px]">{att.name}</span>
+                              <Paperclip className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
+                              <span className="truncate max-w-[60px] sm:max-w-[80px]">{att.name}</span>
                             </a>
                           ))}
                         </div>
@@ -572,6 +617,191 @@ function TaskItem({
         )}
       </CardContent>
     </Card>
+
+    <Dialog open={isViewing} onOpenChange={setIsViewing}>
+      <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto p-0 gap-0 border-primary/20 shadow-2xl">
+        <div className={cn("h-2 w-full", typeInfo.bg)} />
+        <div className="p-6">
+          <DialogHeader className="mb-6">
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <Badge variant="outline" className={cn("text-[10px] uppercase font-black px-2 py-0.5", typeInfo.bg, typeInfo.color, typeInfo.border)}>
+                {typeInfo.label}
+              </Badge>
+              {task.course && (
+                <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary border-none font-bold px-2 py-0.5">
+                  {task.course.name}
+                </Badge>
+              )}
+              {task.isCompleted && (
+                <Badge className="text-[10px] bg-green-500/10 text-green-600 border-green-500/20 font-bold px-2 py-0.5 flex items-center gap-1">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Completed
+                </Badge>
+              )}
+            </div>
+            <DialogTitle className="text-2xl font-bold tracking-tight mb-1">
+              {task.title}
+            </DialogTitle>
+            <DialogDescription className="text-sm flex items-center gap-4">
+              <span className="flex items-center gap-1.5">
+                <Trophy className="h-3.5 w-3.5 text-primary" />
+                <span className="font-bold text-foreground">{task.importance} Points</span>
+              </span>
+              {task.deadline && (
+                <span className="flex items-center gap-1.5">
+                  <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>Due {formatDate(task.deadline)}</span>
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-8">
+            {/* Description Section */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-primary">
+                <Info className="h-4 w-4" />
+                <h4 className="text-xs font-bold uppercase tracking-wider">Mission Briefing</h4>
+              </div>
+              <div className="bg-muted/30 rounded-xl p-4 border border-border/50">
+                <p className="text-sm leading-relaxed text-foreground/90 whitespace-pre-wrap italic">
+                  {task.description || "No detailed description provided for this task."}
+                </p>
+              </div>
+            </div>
+
+            {/* Progress Section */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-orange-500">
+                  <Timer className="h-4 w-4" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider">Focus Statistics</h4>
+                </div>
+                <div className="bg-orange-50/50 dark:bg-orange-950/10 rounded-xl p-4 border border-orange-200/50 flex flex-col gap-1">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-2xl font-black text-orange-600">{formatSeconds(actualTotalSeconds)}</span>
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase">Actual Focus</span>
+                  </div>
+                  <div className="flex justify-between items-baseline border-t border-orange-200/30 pt-1 mt-1">
+                    <span className="text-sm font-bold text-foreground/70">{task.estimatedPomodoros * 25}m</span>
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase">Estimated</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Clock3 className="h-4 w-4" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider">Timeline</h4>
+                </div>
+                <div className="bg-muted/30 rounded-xl p-4 border border-border/50 flex flex-col gap-2">
+                  <div className="flex justify-between items-center text-[10px]">
+                    <span className="font-bold text-muted-foreground uppercase">Created</span>
+                    <span className="font-medium">{formatDate(task.createdAt)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[10px]">
+                    <span className="font-bold text-muted-foreground uppercase">Last Update</span>
+                    <span className="font-medium">{formatDate(task.updatedAt)}</span>
+                  </div>
+                  {task.completedAt && (
+                    <div className="flex justify-between items-center text-[10px] text-green-600">
+                      <span className="font-bold uppercase">Archived</span>
+                      <span className="font-medium">{formatDate(task.completedAt)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Attachments Section */}
+            {task.attachments && task.attachments.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-blue-500">
+                  <Paperclip className="h-4 w-4" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider">Intelligence Assets ({task.attachments.length})</h4>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {task.attachments.map((att) => (
+                    <a 
+                      key={att.id}
+                      href={att.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between p-3 rounded-xl bg-background border border-border hover:border-primary/50 hover:bg-primary/5 transition-all group/asset"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="bg-muted p-2 rounded-lg group-hover/asset:bg-primary/10 transition-colors">
+                          <FileText className="h-4 w-4 text-muted-foreground group-hover/asset:text-primary" />
+                        </div>
+                        <span className="text-xs font-bold truncate max-w-[150px]">{att.name}</span>
+                      </div>
+                      <LinkIcon className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover/asset:opacity-100 transition-all" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Sub-tasks Detailed Section */}
+            {task.children && task.children.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-primary">
+                  <Sparkles className="h-4 w-4 animate-pulse" />
+                  <h4 className="text-xs font-bold uppercase tracking-wider">Actionable Roadmap</h4>
+                </div>
+                <div className="space-y-2">
+                  {task.children.map((child) => (
+                    <div 
+                      key={child.id}
+                      className={cn(
+                        "flex items-center justify-between p-3 rounded-xl border transition-all",
+                        child.isCompleted 
+                          ? "bg-muted/30 border-muted-foreground/10 opacity-60" 
+                          : "bg-primary/5 border-primary/10 hover:border-primary/30"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "p-1 rounded-full",
+                          child.isCompleted ? "bg-green-500/10" : "bg-primary/10"
+                        )}>
+                          {child.isCompleted ? (
+                            <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <Circle className="h-4 w-4 text-primary" />
+                          )}
+                        </div>
+                        <span className={cn(
+                          "text-sm font-bold",
+                          child.isCompleted && "line-through"
+                        )}>{child.title}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-[9px] font-black tracking-tighter tabular-nums px-1.5">
+                          {formatSeconds(child.actualSeconds || 0)}
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        <DialogFooter className="p-6 border-t bg-muted/20">
+          <Button variant="outline" onClick={() => setIsViewing(false)} className="font-bold">
+            Dismiss Briefing
+          </Button>
+          <Button 
+            onClick={() => { setIsViewing(false); setEditing(true); }}
+            className="font-bold shadow-lg shadow-primary/20"
+          >
+            Edit Mission
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
