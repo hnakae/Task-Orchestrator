@@ -228,6 +228,20 @@ function TaskItem({
     setLocalCompleted(task.isCompleted);
   }, [task.isCompleted]);
 
+  // Handle Escape key to exit editing mode
+  useEffect(() => {
+    if (!editing) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setEditing(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [editing]);
+
   useEffect(() => {
     if (editing) {
       async function loadCourses() {
