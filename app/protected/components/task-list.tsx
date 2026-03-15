@@ -502,120 +502,123 @@ function TaskItem({
           </form>
         </div>
       </CardHeader>
-      <CardContent className="pb-3 sm:pb-4 relative z-10 border-t bg-muted/5 mt-1 pt-3 sm:pt-4">
-        {showTimer && (
-          <div className="mb-3 sm:mb-4 animate-in zoom-in-95 duration-200">
-            {(() => {
-              const firstIncompleteChild = task.children?.find(c => !c.isCompleted);
-              return (
-                <PomodoroTimer 
-                  taskId={task.id} 
-                  taskTitle={task.title} 
-                  subTaskTitle={firstIncompleteChild?.title}
-                  onTimeUpdate={async (seconds) => {
-                    // Always update the sub-task if we're working on one
-                    const targetId = firstIncompleteChild ? firstIncompleteChild.id : task.id;
-                    await addTaskDuration(targetId, seconds);
-                  }}
-                  onSessionComplete={async (isDone) => {
-                    if (!isDone) return;
-                    
-                    if (firstIncompleteChild) {
-                      await toggleTaskCompletion(firstIncompleteChild.id, true);
-                      toast.success(`Step "${firstIncompleteChild.title}" completed!`);
-                    } else {
-                      // Complete the main task if no children or all children are complete
-                      await toggleTaskCompletion(task.id, true);
-                      setShowTimer(false);
-                    }
-                  }}
-                />
-              );
-            })()}
-          </div>
-        )}
+      
+      {(showTimer || (task.children && task.children.length > 0)) && (
+        <CardContent className="pb-3 sm:pb-4 relative z-10 border-t bg-muted/5 mt-1 pt-3 sm:pt-4">
+          {showTimer && (
+            <div className="mb-3 sm:mb-4 animate-in zoom-in-95 duration-200">
+              {(() => {
+                const firstIncompleteChild = task.children?.find(c => !c.isCompleted);
+                return (
+                  <PomodoroTimer 
+                    taskId={task.id} 
+                    taskTitle={task.title} 
+                    subTaskTitle={firstIncompleteChild?.title}
+                    onTimeUpdate={async (seconds) => {
+                      // Always update the sub-task if we're working on one
+                      const targetId = firstIncompleteChild ? firstIncompleteChild.id : task.id;
+                      await addTaskDuration(targetId, seconds);
+                    }}
+                    onSessionComplete={async (isDone) => {
+                      if (!isDone) return;
+                      
+                      if (firstIncompleteChild) {
+                        await toggleTaskCompletion(firstIncompleteChild.id, true);
+                        toast.success(`Step "${firstIncompleteChild.title}" completed!`);
+                      } else {
+                        // Complete the main task if no children or all children are complete
+                        await toggleTaskCompletion(task.id, true);
+                        setShowTimer(false);
+                      }
+                    }}
+                  />
+                );
+              })()}
+            </div>
+          )}
 
-        {deleteState && <p className="text-[11px] sm:text-sm text-destructive mb-3 font-medium bg-destructive/10 p-2 rounded border border-destructive/20">{deleteState}</p>}
+          {deleteState && <p className="text-[11px] sm:text-sm text-destructive mb-3 font-medium bg-destructive/10 p-2 rounded border border-destructive/20">{deleteState}</p>}
 
-        {/* Nested Sub-tasks */}
-        {task.children && task.children.length > 0 && (
-          <div className="mt-0 pt-0 flex flex-col gap-1.5 sm:gap-2">
-            <button 
-              onClick={() => setIsStepsExpanded(!isStepsExpanded)}
-              className="flex items-center justify-between w-full hover:bg-primary/5 p-1 rounded transition-colors group/steps"
-            >
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-primary animate-pulse" />
-                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-muted-foreground text-left">Actionable Steps</span>
-                <Badge variant="secondary" className="text-[7px] sm:text-[8px] h-3 sm:h-3.5 px-1 bg-primary/10 text-primary border-none">
-                  {task.children.filter(c => c.isCompleted).length}/{task.children.length}
-                </Badge>
-              </div>
-              {isStepsExpanded ? (
-                <ChevronDown className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-muted-foreground group-hover/steps:text-primary transition-colors" />
-              ) : (
-                <ChevronRight className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-muted-foreground group-hover/steps:text-primary transition-colors" />
-              )}
-            </button>
-            
-            {isStepsExpanded && (
-              <div className="flex flex-col gap-1.5 sm:gap-2 ml-2 sm:ml-4 border-l-2 border-primary/10 pl-2 sm:pl-4 animate-in slide-in-from-top-1 duration-200">
-                {task.children.map((child) => {
-                  const childSeconds = child.actualSeconds || 0;
-                  return (
-                    <div key={child.id} className={cn(
-                      "flex flex-col gap-1 p-1.5 sm:p-2 rounded-lg transition-all group/sub",
-                      child.isCompleted ? "bg-muted/50 opacity-75" : "bg-primary/5 border border-primary/10"
-                    )}>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                          <button 
-                            onClick={async () => {
-                              const res = await toggleTaskCompletion(child.id, !child.isCompleted);
-                              if (!res.success) toast.error(res.error);
-                            }}
-                            className="transition-transform active:scale-90 shrink-0"
-                          >
-                            {child.isCompleted ? (
-                              <CheckCircle2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-green-500" />
-                            ) : (
-                              <Circle className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground hover:text-primary" />
-                            )}
-                          </button>
-                          <span className={cn(
-                            "text-[11px] sm:text-xs font-bold truncate",
-                            child.isCompleted ? "line-through text-muted-foreground" : "text-foreground/90"
-                          )}>{child.title}</span>
-                        </div>
-                        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-                          <span className="text-[8px] sm:text-[9px] font-bold text-muted-foreground">{formatSeconds(childSeconds)}</span>
-                          <Badge variant="outline" className="text-[7px] sm:text-[8px] h-3 sm:h-3.5 px-0.5 sm:px-1 bg-background font-bold uppercase border-primary/20">Step</Badge>
-                        </div>
-                      </div>
-                      {child.attachments && child.attachments.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-0.5 ml-4 sm:ml-5">
-                          {child.attachments.map((att) => (
-                            <a 
-                              key={att.id}
-                              href={att.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-1 text-[8px] sm:text-[9px] text-muted-foreground hover:text-primary transition-colors"
+          {/* Nested Sub-tasks */}
+          {task.children && task.children.length > 0 && (
+            <div className="mt-0 pt-0 flex flex-col gap-1.5 sm:gap-2">
+              <button 
+                onClick={() => setIsStepsExpanded(!isStepsExpanded)}
+                className="flex items-center justify-between w-full hover:bg-primary/5 p-1 rounded transition-colors group/steps"
+              >
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <Sparkles className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-primary animate-pulse" />
+                  <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-widest text-muted-foreground text-left">Actionable Steps</span>
+                  <Badge variant="secondary" className="text-[7px] sm:text-[8px] h-3 sm:h-3.5 px-1 bg-primary/10 text-primary border-none">
+                    {task.children.filter(c => c.isCompleted).length}/{task.children.length}
+                  </Badge>
+                </div>
+                {isStepsExpanded ? (
+                  <ChevronDown className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-muted-foreground group-hover/steps:text-primary transition-colors" />
+                ) : (
+                  <ChevronRight className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-muted-foreground group-hover/steps:text-primary transition-colors" />
+                )}
+              </button>
+              
+              {isStepsExpanded && (
+                <div className="flex flex-col gap-1.5 sm:gap-2 ml-2 sm:ml-4 border-l-2 border-primary/10 pl-2 sm:pl-4 animate-in slide-in-from-top-1 duration-200">
+                  {task.children.map((child) => {
+                    const childSeconds = child.actualSeconds || 0;
+                    return (
+                      <div key={child.id} className={cn(
+                        "flex flex-col gap-1 p-1.5 sm:p-2 rounded-lg transition-all group/sub",
+                        child.isCompleted ? "bg-muted/50 opacity-75" : "bg-primary/5 border border-primary/10"
+                      )}>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                            <button 
+                              onClick={async () => {
+                                const res = await toggleTaskCompletion(child.id, !child.isCompleted);
+                                if (!res.success) toast.error(res.error);
+                              }}
+                              className="transition-transform active:scale-90 shrink-0"
                             >
-                              <Paperclip className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
-                              <span className="truncate max-w-[60px] sm:max-w-[80px]">{att.name}</span>
-                            </a>
-                          ))}
+                              {child.isCompleted ? (
+                                <CheckCircle2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-green-500" />
+                              ) : (
+                                <Circle className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground hover:text-primary" />
+                              )}
+                            </button>
+                            <span className={cn(
+                              "text-[11px] sm:text-xs font-bold truncate",
+                              child.isCompleted ? "line-through text-muted-foreground" : "text-foreground/90"
+                            )}>{child.title}</span>
+                          </div>
+                          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                            <span className="text-[8px] sm:text-[9px] font-bold text-muted-foreground">{formatSeconds(childSeconds)}</span>
+                            <Badge variant="outline" className="text-[7px] sm:text-[8px] h-3 sm:h-3.5 px-0.5 sm:px-1 bg-background font-bold uppercase border-primary/20">Step</Badge>
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
-      </CardContent>
+                        {child.attachments && child.attachments.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-0.5 ml-4 sm:ml-5">
+                            {child.attachments.map((att) => (
+                              <a 
+                                key={att.id}
+                                href={att.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-[8px] sm:text-[9px] text-muted-foreground hover:text-primary transition-colors"
+                              >
+                                <Paperclip className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
+                                <span className="truncate max-w-[60px] sm:max-w-[80px]">{att.name}</span>
+                              </a>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      )}
     </Card>
 
     <Dialog open={isViewing} onOpenChange={setIsViewing}>
