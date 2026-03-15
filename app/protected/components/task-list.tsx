@@ -1,17 +1,17 @@
 "use client";
 
-import { useActionState, useState, useMemo, useEffect } from "react";
+import { useActionState, useState, useEffect, use, Suspense } from "react";
 import { 
   updateTask, 
   deleteTask, 
   updateTaskOrder, 
-  getAIOptimizedFocus, 
   deleteAllTasks, 
   decomposeTask, 
   toggleTaskCompletion, 
   getCourses,
   addTaskDuration,
-  TaskWithAttachments 
+  TaskWithAttachments,
+  ActionResult
 } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,24 +28,13 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "./ui/alert-dialog";
-import {
   DndContext,
   closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
   DragEndEvent,
+  useSensors,
+  useSensor,
+  PointerSensor,
+  KeyboardSensor,
 } from "@dnd-kit/core";
 import {
   arrayMove,
@@ -58,7 +47,6 @@ import { CSS } from "@dnd-kit/utilities";
 import { 
   GripVertical, 
   Sparkles, 
-  Shuffle, 
   Trash2, 
   Split, 
   BookOpen, 
@@ -75,8 +63,6 @@ import {
   FileCheck,
   GraduationCap,
   Bell,
-  ArrowRight,
-  Target,
   Eye,
   CalendarDays,
   Clock3,
@@ -97,9 +83,11 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogFooter,
 } from "./ui/dialog";
+import { AIOptimizationEngine } from "./AIOptimizationEngine";
+import { TaskListHeader } from "./TaskListHeader";
+import { Skeleton } from "./ui/skeleton";
 
 function formatDate(date: Date | null) {
   if (!date) return "—";
@@ -129,6 +117,14 @@ function getTaskTypeInfo(type: string) {
     default:
       return { icon: Circle, color: "text-muted-foreground", bg: "bg-muted/50", border: "border-border", label: type };
   }
+}
+
+function useMounted() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  return mounted;
 }
 
 function TaskItem({ 
@@ -338,7 +334,7 @@ function TaskItem({
       <CardHeader className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4 pb-3 relative z-10">
         <div className="flex items-start gap-2 sm:gap-3 flex-1 w-full min-w-0">
           <div className="flex flex-col gap-2 mt-1 shrink-0">
-            {dragHandleProps && (
+            {dragHandleProps ? (
               <button
                 {...dragHandleProps}
                 className="p-1.5 hover:bg-primary/10 rounded-md cursor-grab active:cursor-grabbing shrink-0 transition-colors bg-muted/50"
@@ -346,6 +342,10 @@ function TaskItem({
               >
                 <GripVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground group-hover:text-primary transition-colors" />
               </button>
+            ) : (
+              <div className="p-1.5 rounded-md shrink-0 bg-muted/50 opacity-50">
+                <GripVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+              </div>
             )}
             <button 
               onClick={onToggleComplete}
@@ -831,22 +831,107 @@ function SortableTaskItem({ task }: { task: TaskWithAttachments }) {
   );
 }
 
-export function TaskList({ initialTasks }: { initialTasks: TaskWithAttachments[] }) {
-  const [tasks, setTasks] = useState(initialTasks);
+function TaskListContent({ 
+  initialTasksPromise, 
+  tasks, 
+  setTasks,
+  isSorting,
+  handleDragEnd,
+  sensors
+}: { 
+  initialTasksPromise: Promise<ActionResult<TaskWithAttachments[]>>;
+  tasks: TaskWithAttachments[] | null;
+  setTasks: (tasks: TaskWithAttachments[]) => void;
+  isSorting: boolean;
+  handleDragEnd: (event: DragEndEvent) => void;
+  sensors: any;
+}) {
+  const mounted = useMounted();
+  const result = use(initialTasksPromise);
+  const initialTasks = result.success ? result.data : [];
+  
+  useEffect(() => {
+    if (tasks === null && initialTasks.length > 0) {
+      setTasks(initialTasks);
+    }
+  }, [initialTasks, tasks, setTasks]);
+
+  const displayTasks = tasks ?? initialTasks;
+
+  if (displayTasks.length === 0) {
+    return <p className="text-muted-foreground text-sm">No tasks yet. Add one above.</p>;
+  }
+
+  if (!mounted) {
+    return (
+      <div className="transition-all duration-500">
+        <ul className="flex flex-col gap-3 list-none p-0 m-0">
+          {displayTasks.map((task) => (
+            <li key={task.id} className="list-none">
+              <TaskItem task={task} />
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn(
+      "transition-all duration-500",
+      isSorting && "opacity-40 blur-[1px] pointer-events-none scale-[0.98]"
+    )}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={displayTasks.map((t) => t.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          <ul className="flex flex-col gap-3 list-none p-0 m-0">
+            {displayTasks.map((task) => (
+              <SortableTaskItem key={task.id} task={task} />
+            ))}
+          </ul>
+        </SortableContext>
+      </DndContext>
+    </div>
+  );
+}
+
+function TaskListSkeleton() {
+  return (
+    <div className="flex flex-col gap-3 animate-pulse">
+      {[1, 2, 3].map((i) => (
+        <Card key={i} className="border-border bg-card shadow-sm overflow-hidden">
+          <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+            <div className="flex items-start gap-3 flex-1">
+              <div className="flex flex-col gap-2 mt-1">
+                <Skeleton className="h-8 w-8 rounded-md" />
+                <Skeleton className="h-8 w-8 rounded-md" />
+              </div>
+              <div className="flex flex-col gap-3 flex-1">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-4 w-4" />
+                  <Skeleton className="h-5 w-1/2" />
+                </div>
+                <Skeleton className="h-3 w-3/4" />
+              </div>
+            </div>
+          </CardHeader>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+export function TaskList({ initialTasksPromise }: { initialTasksPromise: Promise<ActionResult<TaskWithAttachments[]>> }) {
+  const [tasks, setTasks] = useState<TaskWithAttachments[] | null>(null);
   const [isSorting, setIsSorting] = useState(false);
   const [isShuffling, setIsShuffling] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
-  const [aiRecommendation, setAIRecommendation] = useState<string | null>(null);
-
-  useEffect(() => {
-    setTasks(initialTasks);
-  }, [initialTasks]);
-
-  const completionRate = useMemo(() => {
-    if (initialTasks.length === 0) return 0;
-    const completedCount = initialTasks.filter(t => t.isCompleted).length;
-    return Math.round((completedCount / initialTasks.length) * 100);
-  }, [initialTasks]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -855,39 +940,18 @@ export function TaskList({ initialTasks }: { initialTasks: TaskWithAttachments[]
     })
   );
 
-  async function handleSortByFocusScore() {
-    setIsSorting(true);
-    setAIRecommendation(null);
-
-    const result = await getAIOptimizedFocus(tasks);
-
-    if (result.success) {
-      setAIRecommendation(result.data.recommendation);
-
-      const optimizedTasks = result.data.optimizedIds
-        .map(id => tasks.find(t => t.id === id))
-        .filter((t): t is TaskWithAttachments => !!t);
-
-      if (optimizedTasks.length === tasks.length) {
-        setTasks(optimizedTasks);
-
-        const taskPositions = optimizedTasks.map((task, index) => ({
-          id: task.id,
-          position: index,
-        }));
-
-        await updateTaskOrder(taskPositions);
-      }
-    } else {
-      toast.error(result.error);
-    }
-
-    setIsSorting(false);
-  }
-
   async function handleShuffle() {
+    let currentTasks = tasks;
+    if (!currentTasks) {
+      const result = await initialTasksPromise;
+      if (result.success) {
+        currentTasks = result.data;
+        setTasks(currentTasks);
+      } else return;
+    }
+    
     setIsShuffling(true);
-    const shuffledTasks = [...tasks].sort(() => Math.random() - 0.5);
+    const shuffledTasks = [...currentTasks].sort(() => Math.random() - 0.5);
 
     setTasks(shuffledTasks);
 
@@ -904,6 +968,7 @@ export function TaskList({ initialTasks }: { initialTasks: TaskWithAttachments[]
     setIsDeletingAll(true);
     const result = await deleteAllTasks();
     if (result.success) {
+      setTasks([]);
       toast.success("All tasks deleted successfully");
     } else {
       toast.error(result.error);
@@ -913,6 +978,7 @@ export function TaskList({ initialTasks }: { initialTasks: TaskWithAttachments[]
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
+    if (!tasks) return;
 
     if (over && active.id !== over.id) {
       const oldIndex = tasks.findIndex((t) => t.id === active.id);
@@ -930,159 +996,31 @@ export function TaskList({ initialTasks }: { initialTasks: TaskWithAttachments[]
     }
   }
 
-  if (initialTasks.length === 0) {
-    return <p className="text-muted-foreground text-sm">No tasks yet. Add one above.</p>;
-  }
-
   return (
     <div className="flex flex-col gap-6">
-      {/* AI Center Stage Button */}
-      <div className="flex flex-col items-center gap-4 py-4 bg-muted/20 rounded-2xl border border-dashed border-primary/20 relative overflow-hidden group">
-        <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent opacity-50" />
+      <AIOptimizationEngine 
+        tasksPromise={initialTasksPromise} 
+        onOptimized={(optimizedTasks) => setTasks(optimizedTasks)} 
+      />
 
-        <div className="flex flex-col items-center gap-1 relative z-10">
-          <span className="text-[10px] font-bold text-primary uppercase tracking-[0.2em]">Optimization Engine</span>
-          <h3 className="text-sm font-medium text-muted-foreground">Let AI determine your most impactful flow</h3>
-        </div>
+      <TaskListHeader 
+        tasksPromise={initialTasksPromise}
+        onShuffle={handleShuffle}
+        onDeleteAll={handleDeleteAll}
+        isShuffling={isShuffling}
+        isDeletingAll={isDeletingAll}
+      />
 
-        <Button 
-          variant="outline" 
-          size="lg" 
-          onClick={handleSortByFocusScore}
-          disabled={isSorting || isShuffling}
-          className={cn(
-            "relative h-14 px-8 rounded-full border-primary/20 hover:border-primary/50 transition-all duration-500 bg-background shadow-xl hover:shadow-primary/10 overflow-hidden group w-full max-w-xs",
-            isSorting && "ring-2 ring-primary ring-offset-2 ring-offset-background"
-          )}
-        >
-          <div className={cn(
-            "absolute inset-0 bg-gradient-to-r from-primary/20 via-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500",
-            isSorting && "opacity-100 animate-pulse"
-          )} />
-
-          <div className="relative flex items-center justify-center gap-3">
-            <div className="relative">
-              <Sparkles className={cn(
-                "h-5 w-5 text-primary transition-all duration-700",
-                isSorting ? "animate-spin scale-125" : "animate-pulse group-hover:scale-110"
-              )} />
-              {isSorting && (
-                <Sparkles className="h-5 w-5 text-primary absolute inset-0 animate-ping opacity-50" />
-              )}
-            </div>
-            <span className="text-base font-bold tracking-tight text-foreground">
-              {isSorting ? "AI is thinking..." : "AI Optimize Focus"}
-            </span>
-          </div>
-        </Button>
-      </div>
-
-      {aiRecommendation && (
-        <div className="bg-primary/10 border border-primary/20 p-4 rounded-lg flex gap-3 items-start animate-in fade-in slide-in-from-top-2 duration-500">
-          <Sparkles className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-bold text-primary uppercase tracking-wider">AI Recommendation</span>
-            <p className="text-sm text-foreground/90 font-medium italic">"{aiRecommendation}"</p>
-          </div>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="ml-auto h-6 w-6 text-muted-foreground hover:bg-primary/10" 
-            onClick={() => setAIRecommendation(null)}
-          >
-            <span className="sr-only">Dismiss</span>
-            <span aria-hidden>×</span>
-          </Button>
-        </div>
-      )}
-
-      <div className="flex justify-between items-center mt-2">
-        <div className="flex items-center gap-4">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            Your Tasks
-            <Badge variant="secondary" className="rounded-full px-2 py-0 h-5 min-w-[1.25rem] flex items-center justify-center text-[10px]">
-              {tasks.length}
-            </Badge>
-          </h2>
-          {completionRate !== null && (
-            <div className="flex items-center gap-2 px-3 py-1 bg-primary/5 border border-primary/10 rounded-full">
-              <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
-              <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Completion:</span>
-              <span className={cn(
-                "text-[11px] font-black",
-                completionRate >= 80 ? "text-green-600" :
-                completionRate >= 50 ? "text-yellow-600" :
-                "text-red-600"
-              )}>
-                {completionRate}%
-              </span>
-            </div>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={handleShuffle}
-            disabled={isShuffling || isSorting}
-            className="text-muted-foreground hover:text-primary transition-colors text-xs font-medium"
-          >
-            <Shuffle className={cn("h-3 w-3 mr-1.5", isShuffling && "animate-spin")} />
-            {isShuffling ? "Shuffling..." : "Shuffle"}
-          </Button>
-
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                disabled={isDeletingAll || isSorting || isShuffling}
-                className="text-muted-foreground hover:text-destructive transition-colors text-xs font-medium"
-              >
-                <Trash2 className="h-3 w-3 mr-1.5" />
-                {isDeletingAll ? "Deleting..." : "Delete All"}
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete all of your
-                  tasks from our servers.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteAll} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Delete All
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        </div>
-      </div>
-
-      <div className={cn(
-        "transition-all duration-500",
-        isSorting && "opacity-40 blur-[1px] pointer-events-none scale-[0.98]"
-      )}>
-        <DndContext
+      <Suspense fallback={<TaskListSkeleton />}>
+        <TaskListContent 
+          initialTasksPromise={initialTasksPromise}
+          tasks={tasks}
+          setTasks={setTasks}
+          isSorting={isSorting}
+          handleDragEnd={handleDragEnd}
           sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={tasks.map((t) => t.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <ul className="flex flex-col gap-3 list-none p-0 m-0">
-              {tasks.map((task) => (
-                <SortableTaskItem key={task.id} task={task} />
-              ))}
-            </ul>
-          </SortableContext>
-        </DndContext>
-      </div>
+        />
+      </Suspense>
     </div>
   );
 }

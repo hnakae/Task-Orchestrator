@@ -44,9 +44,12 @@ type RubricItem = {
   weight: number;
 };
 
+// Persistent client-side cache
+let cachedCourses: any[] | null = null;
+
 export function CourseManager() {
-  const [courses, setCourses] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [courses, setCourses] = useState<any[]>(cachedCourses || []);
+  const [isLoading, setIsLoading] = useState(!cachedCourses);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
@@ -54,10 +57,17 @@ export function CourseManager() {
   const [courseName, setCourseName] = useState("");
   const [rubricItems, setRubricItems] = useState<RubricItem[]>([]);
 
-  const loadCourses = async () => {
+  const loadCourses = async (force = false) => {
+    if (!force && cachedCourses) {
+      setCourses(cachedCourses);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     const res = await getCourses();
     if (res.success) {
+      cachedCourses = res.data;
       setCourses(res.data);
     } else {
       toast.error(res.error);

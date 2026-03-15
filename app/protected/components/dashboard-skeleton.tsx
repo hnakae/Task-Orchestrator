@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export function DashboardSkeleton() {
   return (
-    <div className="flex flex-col gap-6 w-full animate-pulse">
+    <div className="flex flex-col gap-6 w-full">
       {/* AI Optimization Button Skeleton */}
       <div className="flex flex-col items-center gap-4 py-8 bg-muted/20 rounded-2xl border border-dashed border-primary/10">
         <Skeleton className="h-4 w-32" />
