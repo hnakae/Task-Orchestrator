@@ -324,7 +324,7 @@ export async function updateTask(
     }
 
 /** Toggle a task's completion status. */
-export async function toggleTaskCompletion(id: string, isCompleted: boolean): Promise<ActionResult<void>> {
+export async function toggleTaskCompletion(id: string, isCompleted: boolean): Promise<ActionResult<TaskWithAttachments[]>> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "Not authenticated" };
@@ -338,49 +338,99 @@ export async function toggleTaskCompletion(id: string, isCompleted: boolean): Pr
     if (!task) return { success: false, error: "Task not found" };
 
     // Update the task itself
-    await prisma.task.update({
-      where: { id, userId: user.id },
-      data: { 
-        isCompleted,
-        completedAt: isCompleted ? new Date() : null
-      }
-    });
+    await prisma.$transaction(async (tx) => {
+      const currentTask = await tx.task.findUnique({
+        where: { id, userId: user.id },
+        select: { actualSeconds: true, parentId: true }
+      });
 
-    // Handle parent-child completion sync
-    if (task.parentId) {
-      if (isCompleted) {
-        // If marking as completed, check if all siblings are now complete
-        const siblingCount = await prisma.task.count({
-          where: { parentId: task.parentId, userId: user.id }
-        });
-        const completedSiblingCount = await prisma.task.count({
-          where: { parentId: task.parentId, userId: user.id, isCompleted: true }
-        });
+      if (!currentTask) throw new Error("Task not found");
 
-        if (siblingCount === completedSiblingCount) {
-          // All sub-tasks are complete, mark parent as complete
-          await prisma.task.update({
-            where: { id: task.parentId, userId: user.id },
-            data: { 
-              isCompleted: true,
-              completedAt: new Date()
-            }
-          });
+      await tx.task.update({
+        where: { id, userId: user.id },
+        data: { 
+          isCompleted,
+          completedAt: isCompleted ? new Date() : null,
+          // Reset timer when unchecking
+          actualSeconds: isCompleted ? undefined : 0
         }
-      } else {
-        // If marking as incomplete, the parent must also be incomplete
-        await prisma.task.update({
-          where: { id: task.parentId, userId: user.id },
-          data: { 
-            isCompleted: false,
-            completedAt: null
+      });
+
+      // Update all subtasks if this is a parent task
+      if (!currentTask.parentId) {
+        await tx.task.updateMany({
+          where: { parentId: id, userId: user.id },
+          data: {
+            isCompleted,
+            completedAt: isCompleted ? new Date() : null,
+            // Reset timer when unchecking
+            actualSeconds: isCompleted ? undefined : 0
           }
         });
       }
-    }
+
+      // Handle parent-child completion sync and timer subtraction
+      if (currentTask.parentId) {
+        if (isCompleted) {
+          // If marking as completed, check if all siblings are now complete
+          const siblingCount = await tx.task.count({
+            where: { parentId: currentTask.parentId, userId: user.id }
+          });
+          const completedSiblingCount = await tx.task.count({
+            where: { parentId: currentTask.parentId, userId: user.id, isCompleted: true }
+          });
+
+          if (siblingCount === completedSiblingCount) {
+            // All sub-tasks are complete, mark parent as complete
+            await tx.task.update({
+              where: { id: currentTask.parentId, userId: user.id },
+              data: { 
+                isCompleted: true,
+                completedAt: new Date()
+              }
+            });
+          }
+        } else {
+          // If marking as incomplete, the parent must also be incomplete
+          // AND subtract this sub-task's time from the parent's total
+          await tx.task.update({
+            where: { id: currentTask.parentId, userId: user.id },
+            data: { 
+              isCompleted: false,
+              completedAt: null,
+              actualSeconds: {
+                decrement: currentTask.actualSeconds
+              }
+            }
+          });
+        }
+      }
+    });
 
     revalidatePath("/protected");
-    return { success: true, data: undefined };
+    
+    // Fetch and return the updated tasks for immediate client-side update
+    const tasks = await prisma.task.findMany({
+      where: { 
+        userId: user.id,
+        parentId: null 
+      },
+      include: { 
+        attachments: true,
+        course: true,
+        children: {
+          include: { attachments: true },
+          orderBy: { position: 'asc' }
+        }
+      },
+      orderBy: [
+        { position: "asc" },
+        { deadline: "asc" },
+        { createdAt: "asc" },
+      ],
+    });
+    
+    return { success: true, data: tasks as TaskWithAttachments[] };
   } catch (error) {
     console.error("Toggle task error:", error);
     return { success: false, error: "Failed to toggle task" };

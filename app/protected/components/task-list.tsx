@@ -10,6 +10,7 @@ import {
   toggleTaskCompletion, 
   getCourses,
   addTaskDuration,
+  getTasks,
   TaskWithAttachments,
   ActionResult
 } from "../actions";
@@ -127,14 +128,88 @@ function useMounted() {
   return mounted;
 }
 
+/**
+ * Helper to optimistically update the task list UI when a task is toggled.
+ * Handles parent-child relationships and timer resets.
+ */
+function applyOptimisticToggle(
+  tasks: TaskWithAttachments[], 
+  targetId: string, 
+  isCompleted: boolean
+): TaskWithAttachments[] {
+  return tasks.map(t => {
+    // 1. Is this the top-level task being toggled?
+    if (t.id === targetId) {
+      // Toggle all children to match the parent's new state
+      const updatedChildren = t.children 
+        ? t.children.map(c => ({ 
+            ...c, 
+            isCompleted, 
+            completedAt: isCompleted ? new Date() : null, 
+            actualSeconds: isCompleted ? (c as any).actualSeconds : 0 
+          }))
+        : t.children;
+
+      return { 
+        ...t, 
+        isCompleted, 
+        completedAt: isCompleted ? new Date() : null,
+        actualSeconds: isCompleted ? (t as any).actualSeconds : 0,
+        children: updatedChildren
+      } as any;
+    }
+    
+    // 2. Is it a child of this task?
+    if (t.children && t.children.length > 0) {
+      const childIndex = t.children.findIndex(c => c.id === targetId);
+      if (childIndex !== -1) {
+        const targetChild = t.children[childIndex];
+        const updatedChildren = [...t.children];
+        updatedChildren[childIndex] = { 
+          ...targetChild, 
+          isCompleted, 
+          completedAt: isCompleted ? new Date() : null,
+          actualSeconds: isCompleted ? (targetChild as any).actualSeconds : 0
+        } as any;
+        
+        let parentCompleted = t.isCompleted;
+        let parentSeconds = (t as any).actualSeconds || 0;
+        
+        if (!isCompleted) {
+          // If a sub-task is unchecked, the parent MUST be unchecked
+          parentCompleted = false;
+          // Subtract child's time from parent
+          parentSeconds = Math.max(0, parentSeconds - ((targetChild as any).actualSeconds || 0));
+        } else {
+          // If all sub-tasks are now checked, parent should be checked
+          const allChecked = updatedChildren.every(c => c.isCompleted);
+          if (allChecked) parentCompleted = true;
+        }
+        
+        return { 
+          ...t, 
+          children: updatedChildren, 
+          isCompleted: parentCompleted,
+          completedAt: parentCompleted ? (t.completedAt || new Date()) : null,
+          actualSeconds: parentSeconds
+        } as any;
+      }
+    }
+    
+    return t;
+  });
+}
+
 function TaskItem({ 
   task, 
   dragHandleProps, 
-  isDragging 
+  isDragging,
+  setTasks
 }: { 
   task: TaskWithAttachments & { actualSeconds?: number }; 
-  dragHandleProps?: any;
+  dragHandleProps?: any; 
   isDragging?: boolean;
+  setTasks?: React.Dispatch<React.SetStateAction<TaskWithAttachments[] | null>>;
 }) {
   const [editing, setEditing] = useState(false);
   const [isViewing, setIsViewing] = useState(false);
@@ -145,6 +220,14 @@ function TaskItem({
   const [courses, setCourses] = useState<any[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<string>(task.courseId || "none");
   
+  // Instant visual feedback state
+  const [localCompleted, setLocalCompleted] = useState(task.isCompleted);
+
+  // Sync with prop when it changes from server (but keep local if we just clicked)
+  useEffect(() => {
+    setLocalCompleted(task.isCompleted);
+  }, [task.isCompleted]);
+
   useEffect(() => {
     if (editing) {
       async function loadCourses() {
@@ -196,19 +279,52 @@ function TaskItem({
   }
 
   async function onToggleComplete() {
-    const newStatus = !task.isCompleted;
+    const newStatus = !localCompleted;
+    
+    // 1. INSTANT visual feedback
+    setLocalCompleted(newStatus);
+    
+    // 2. Optimistic parent state update
+    if (setTasks) {
+      setTasks(current => current ? applyOptimisticToggle(current, task.id, newStatus) : null);
+    }
+
+    // 3. Server update
     const result = await toggleTaskCompletion(task.id, newStatus);
-    if (!result.success) {
+    if (result.success) {
+      if (setTasks) setTasks(result.data);
+    } else {
       toast.error(result.error);
+      // Revert local on error
+      setLocalCompleted(!newStatus);
+      const refetched = await getTasks();
+      if (refetched.success && setTasks) setTasks(refetched.data);
+    }
+  }
+
+  async function onToggleSubTask(childId: string, currentStatus: boolean) {
+    const newSubStatus = !currentStatus;
+    
+    // Parent optimistic update
+    if (setTasks) {
+      setTasks(current => current ? applyOptimisticToggle(current, childId, newSubStatus) : null);
+    }
+
+    const res = await toggleTaskCompletion(childId, newSubStatus);
+    if (res.success) {
+      if (setTasks) setTasks(res.data);
+    } else {
+      toast.error(res.error);
+      const refetched = await getTasks();
+      if (refetched.success && setTasks) setTasks(refetched.data);
     }
   }
 
   useEffect(() => {
-    if (task.isCompleted) {
+    if (localCompleted) {
       setShowTimer(false);
-      setIsStepsExpanded(false);
     }
-  }, [task.isCompleted]);
+  }, [localCompleted]);
 
   const actualTotalSeconds = task.actualSeconds || 0;
 
@@ -328,7 +444,7 @@ function TaskItem({
     <>
     <Card className={cn(
       isDragging ? "opacity-50 ring-2 ring-primary ring-offset-2 ring-offset-background" : "hover:shadow-md hover:border-primary/40",
-      task.isCompleted && "opacity-75 bg-muted/30 border-muted-foreground/20",
+      localCompleted && "opacity-75 bg-muted/30 border-muted-foreground/20",
       "transition-all duration-300 group overflow-hidden border-border bg-card shadow-sm"
     )}>
       <CardHeader className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4 pb-3 relative z-10">
@@ -350,9 +466,9 @@ function TaskItem({
             <button 
               onClick={onToggleComplete}
               className="p-1.5 hover:bg-primary/10 rounded-md transition-colors shrink-0"
-              title={task.isCompleted ? "Mark as incomplete" : "Mark as complete"}
+              title={localCompleted ? "Mark as incomplete" : "Mark as complete"}
             >
-              {task.isCompleted ? (
+              {localCompleted ? (
                 <CheckCircle2 className="h-4.5 w-4.5 sm:h-5 sm:w-5 text-green-500 fill-green-500/10" />
               ) : (
                 <Circle className="h-4.5 w-4.5 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-primary" />
@@ -369,7 +485,7 @@ function TaskItem({
               >
                 <CardTitle className={cn(
                   "text-sm sm:text-base font-bold leading-tight truncate max-w-[150px] xs:max-w-none",
-                  task.isCompleted && "line-through text-muted-foreground"
+                  localCompleted && "line-through text-muted-foreground"
                 )}>
                   {task.title}
                 </CardTitle>
@@ -445,7 +561,7 @@ function TaskItem({
             <Eye className="h-3 w-3 sm:h-3.5 sm:w-3.5 sm:mr-1.5" />
             <span className="hidden sm:inline">View</span>
           </Button>
-          {!task.isCompleted && (
+          {!localCompleted && (
             <Button 
               type="button" 
               variant={showTimer ? "default" : "secondary"}
@@ -572,10 +688,7 @@ function TaskItem({
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                             <button 
-                              onClick={async () => {
-                                const res = await toggleTaskCompletion(child.id, !child.isCompleted);
-                                if (!res.success) toast.error(res.error);
-                              }}
+                              onClick={() => onToggleSubTask(child.id, child.isCompleted)}
                               className="transition-transform active:scale-90 shrink-0"
                             >
                               {child.isCompleted ? (
@@ -635,7 +748,7 @@ function TaskItem({
                   {task.course.name}
                 </Badge>
               )}
-              {task.isCompleted && (
+              {localCompleted && (
                 <Badge className="text-[10px] bg-green-500/10 text-green-600 border-green-500/20 font-bold px-2 py-0.5 flex items-center gap-1">
                   <CheckCircle2 className="h-3 w-3" />
                   Completed
@@ -808,7 +921,7 @@ function TaskItem({
   );
 }
 
-function SortableTaskItem({ task }: { task: TaskWithAttachments }) {
+function SortableTaskItem({ task, setTasks }: { task: TaskWithAttachments; setTasks: React.Dispatch<React.SetStateAction<TaskWithAttachments[] | null>> }) {
   const {
     attributes,
     listeners,
@@ -829,39 +942,28 @@ function SortableTaskItem({ task }: { task: TaskWithAttachments }) {
         task={task} 
         dragHandleProps={{ ...attributes, ...listeners }}
         isDragging={isDragging}
+        setTasks={setTasks}
       />
     </li>
   );
 }
 
 function TaskListContent({ 
-  initialTasksPromise, 
   tasks, 
   setTasks,
   isSorting,
   handleDragEnd,
   sensors
 }: { 
-  initialTasksPromise: Promise<ActionResult<TaskWithAttachments[]>>;
-  tasks: TaskWithAttachments[] | null;
-  setTasks: (tasks: TaskWithAttachments[]) => void;
+  tasks: TaskWithAttachments[];
+  setTasks: React.Dispatch<React.SetStateAction<TaskWithAttachments[] | null>>;
   isSorting: boolean;
   handleDragEnd: (event: DragEndEvent) => void;
   sensors: any;
 }) {
   const mounted = useMounted();
-  const result = use(initialTasksPromise);
-  const initialTasks = result.success ? result.data : [];
-  
-  useEffect(() => {
-    if (tasks === null && initialTasks.length > 0) {
-      setTasks(initialTasks);
-    }
-  }, [initialTasks, tasks, setTasks]);
 
-  const displayTasks = tasks ?? initialTasks;
-
-  if (displayTasks.length === 0) {
+  if (tasks.length === 0) {
     return <p className="text-muted-foreground text-sm">No tasks yet. Add one above.</p>;
   }
 
@@ -869,9 +971,9 @@ function TaskListContent({
     return (
       <div className="transition-all duration-500">
         <ul className="flex flex-col gap-3 list-none p-0 m-0">
-          {displayTasks.map((task) => (
+          {tasks.map((task) => (
             <li key={task.id} className="list-none">
-              <TaskItem task={task} />
+              <TaskItem task={task} setTasks={setTasks} />
             </li>
           ))}
         </ul>
@@ -890,12 +992,12 @@ function TaskListContent({
         onDragEnd={handleDragEnd}
       >
         <SortableContext
-          items={displayTasks.map((t) => t.id)}
+          items={tasks.map((t) => t.id)}
           strategy={verticalListSortingStrategy}
         >
           <ul className="flex flex-col gap-3 list-none p-0 m-0">
-            {displayTasks.map((task) => (
-              <SortableTaskItem key={task.id} task={task} />
+            {tasks.map((task) => (
+              <SortableTaskItem key={task.id} task={task} setTasks={setTasks} />
             ))}
           </ul>
         </SortableContext>
@@ -936,6 +1038,13 @@ export function TaskList({ initialTasksPromise }: { initialTasksPromise: Promise
   const [isShuffling, setIsShuffling] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
 
+  // Load initial tasks without blocking UI re-renders later
+  useEffect(() => {
+    initialTasksPromise.then(result => {
+      if (result.success) setTasks(result.data);
+    });
+  }, [initialTasksPromise]);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -944,17 +1053,10 @@ export function TaskList({ initialTasksPromise }: { initialTasksPromise: Promise
   );
 
   async function handleShuffle() {
-    let currentTasks = tasks;
-    if (!currentTasks) {
-      const result = await initialTasksPromise;
-      if (result.success) {
-        currentTasks = result.data;
-        setTasks(currentTasks);
-      } else return;
-    }
+    if (!tasks) return;
     
     setIsShuffling(true);
-    const shuffledTasks = [...currentTasks].sort(() => Math.random() - 0.5);
+    const shuffledTasks = [...tasks].sort(() => Math.random() - 0.5);
 
     setTasks(shuffledTasks);
 
@@ -1014,16 +1116,17 @@ export function TaskList({ initialTasksPromise }: { initialTasksPromise: Promise
         isDeletingAll={isDeletingAll}
       />
 
-      <Suspense fallback={<TaskListSkeleton />}>
+      {tasks ? (
         <TaskListContent 
-          initialTasksPromise={initialTasksPromise}
           tasks={tasks}
           setTasks={setTasks}
           isSorting={isSorting}
           handleDragEnd={handleDragEnd}
           sensors={sensors}
         />
-      </Suspense>
+      ) : (
+        <TaskListSkeleton />
+      )}
     </div>
   );
 }
