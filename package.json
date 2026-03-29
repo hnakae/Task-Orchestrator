@@ -7,6 +7,7 @@
     "lint": "eslint .",
     "db:migrate": "dotenv -e .env -- npx prisma migrate dev",
     "db:generate": "npx prisma generate && node fix-types.js",
+    "db:sync": "npm run db:migrate && npm run db:generate",
     "postinstall": "prisma generate && node fix-types.js"
   },
   "dependencies": {
